@@ -16,11 +16,15 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
         $this->init_settings();
 
         // Load merchant configs
-        $this->title        = $this->get_option('title');
-        $this->description  = $this->get_option('description');
-        $this->merchant_id  = $this->get_option('merchant_id');
-        $this->secret_key   = $this->get_option('secret_key');
-        $this->environment  = $this->get_option('environment');
+    $this->title        = $this->get_option('title');
+    $this->description  = $this->get_option('description');
+    $this->merchant_id  = $this->get_option('merchant_id');
+    $this->secret_key   = $this->get_option('secret_key');
+    $this->environment  = $this->get_option('environment');
+    $this->theme        = $this->get_option('theme');
+    $this->payment_method = $this->get_option('payment_method');
+    $this->allowed_payment_types = $this->get_option('allowed_payment_types');
+    $this->timeout      = $this->get_option('timeout');
 
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
 
@@ -69,6 +73,43 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
                 'options'     => ['uat' => 'UAT', 'live' => 'Live'],
                 'description' => __('Select UAT or Live environment'),
                 'default'     => 'uat'
+            ],
+            'theme' => [
+                'title'       => __('Theme (JSON)', 'woocommerce'),
+                'type'        => 'text',
+                'description' => __('Custom theme as JSON, e.g. {"primaryColor":"#E39B2B","secondaryColor":"#000"}'),
+                'default'     => ''
+            ],
+            'payment_method' => [
+                'title'       => __('Default Payment Method', 'woocommerce'),
+                'type'        => 'select',
+                'description' => __('Choose default payment method.'),
+                'options'     => [
+                    'netBanking' => __('Net Banking', 'woocommerce'),
+                    'card' => __('Card', 'woocommerce'),
+                    'upi' => __('UPI', 'woocommerce'),
+                    'wallet' => __('Wallet', 'woocommerce'),
+                ],
+                'default'     => 'netBanking'
+            ],
+            'allowed_payment_types' => [
+                'title'       => __('Allowed Payment Types', 'woocommerce'),
+                'type'        => 'multiselect',
+                'description' => __('Select allowed payment types.'),
+                'options'     => [
+                    'CARD' => __('Card', 'woocommerce'),
+                    'NB' => __('Net Banking', 'woocommerce'),
+                    'UPI_QR' => __('UPI QR', 'woocommerce'),
+                    'UPI_INTENT' => __('UPI Intent', 'woocommerce'),
+                    'UPI_VPA' => __('UPI VPA', 'woocommerce'),
+                ],
+                'default'     => ['CARD', 'NB', 'UPI_QR', 'UPI_INTENT', 'UPI_VPA']
+            ],
+            'timeout' => [
+                'title'       => __('Timeout (ms)', 'woocommerce'),
+                'type'        => 'number',
+                'description' => __('Popup timeout in milliseconds, e.g. 1000'),
+                'default'     => '1000'
             ]
         ];
     }
