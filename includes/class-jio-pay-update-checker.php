@@ -22,7 +22,7 @@ class Jio_Pay_Update_Checker {
         $this->version = $version;
         $this->cache_key = 'jio_pay_update_' . md5($this->plugin_slug);
         $this->cache_allowed = true;
-        $this->update_server_url = $update_server_url ?: 'https://api.github.com/repos/techfleek-code/jio-pay/releases/latest';
+        $this->update_server_url = $update_server_url ?: 'https://api.github.com/repos/jio-pay-wp/woocommerce-plugin/releases/latest';
         
         add_filter('pre_set_site_transient_update_plugins', array($this, 'check_for_update'));
         add_filter('plugins_api', array($this, 'plugin_popup'), 10, 3);
@@ -183,9 +183,9 @@ class Jio_Pay_Update_Checker {
             'name' => 'Jio Pay Gateway',
             'slug' => dirname($this->plugin_slug),
             'version' => $remote_info['version'],
-            'author' => '<a href="https://github.com/techfleek-code">TechFleek</a>',
-            'author_profile' => 'https://github.com/techfleek-code',
-            'homepage' => 'https://github.com/techfleek-code/jio-pay',
+            'author' => '<a href="https://github.com/jio-pay-wp">Jio Pay</a>',
+            'author_profile' => 'https://github.com/jio-pay-wp',
+            'homepage' => 'https://github.com/jio-pay-wp/woocommerce-plugin',
             'requires' => '5.0',
             'tested' => $remote_info['tested'],
             'requires_php' => $remote_info['requires_php'],
@@ -235,7 +235,7 @@ class Jio_Pay_Update_Checker {
                     <li>Configure <strong>Jio Pay Gateway</strong> with your credentials</li>
                     <li>Enable the gateway and save settings</li>
                 </ol>
-                <p>For detailed setup instructions, see the <a href="https://github.com/techfleek-code/jio-pay/blob/main/README.md" target="_blank">README file</a>.</p>';
+                <p>For detailed setup instructions, see the <a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/README.md" target="_blank">README file</a>.</p>';
     }
     
     /**

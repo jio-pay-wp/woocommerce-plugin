@@ -3,9 +3,9 @@
  * Plugin Name: Jio Pay Gateway
  * Description: Accept payments via Jio Pay SDK popup during WooCommerce checkout. Compatible with WooCommerce High-Performance Order Storage (HPOS).
  * Version: 1.0.0
- * Author: TechFleek
- * Author URI: https://github.com/techfleek-code
- * Plugin URI: https://github.com/techfleek-code/jio-pay
+ * Author: Jio Pay
+ * Author URI: https://github.com/jio-pay-wp
+ * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
  * Text Domain: jio-pay-gateway
  * Domain Path: /languages
  * Requires at least: 5.0
@@ -15,7 +15,7 @@
  * WC tested up to: 8.3
  * License: GPL2
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Update URI: https://github.com/techfleek-code/jio-pay
+ * Update URI: https://github.com/jio-pay-wp/woocommerce-plugin
  * Network: false
  */
 
@@ -90,7 +90,7 @@ add_action('init', function() {
     $update_checker = new Jio_Pay_Update_Checker(
         JIO_PAY_PLUGIN_FILE,
         JIO_PAY_VERSION,
-        'https://api.github.com/repos/techfleek-code/jio-pay/releases/latest'
+        'https://api.github.com/repos/jio-pay-wp/woocommerce-plugin/releases/latest'
     );
     
     // Include admin class

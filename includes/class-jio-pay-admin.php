@@ -282,11 +282,11 @@ class Jio_Pay_Admin {
                 <p><?php _e('Need help with setup or troubleshooting? Check out our comprehensive documentation.', 'jio-pay-gateway'); ?></p>
                 
                 <ul style="list-style: disc; margin-left: 20px;">
-                    <li><a href="<?php echo esc_url(JIO_PAY_PLUGIN_URL . 'README.md'); ?>" target="_blank"><?php _e('Installation Guide', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="<?php echo esc_url(JIO_PAY_PLUGIN_URL . 'docs/INTEGRATION_GUIDE.md'); ?>" target="_blank"><?php _e('Integration Guide', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="<?php echo esc_url(JIO_PAY_PLUGIN_URL . 'docs/TROUBLESHOOTING_GUIDE.md'); ?>" target="_blank"><?php _e('Troubleshooting Guide', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="<?php echo esc_url(JIO_PAY_PLUGIN_URL . 'docs/API_DOCUMENTATION.md'); ?>" target="_blank"><?php _e('API Documentation', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="https://github.com/techfleek-code/jio-pay" target="_blank"><?php _e('GitHub Repository', 'jio-pay-gateway'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/README.md" target="_blank"><?php _e('Installation Guide', 'jio-pay-gateway'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/INTEGRATION_GUIDE.md" target="_blank"><?php _e('Integration Guide', 'jio-pay-gateway'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/TROUBLESHOOTING_GUIDE.md" target="_blank"><?php _e('Troubleshooting Guide', 'jio-pay-gateway'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/API_DOCUMENTATION.md" target="_blank"><?php _e('API Documentation', 'jio-pay-gateway'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin" target="_blank"><?php _e('GitHub Repository', 'jio-pay-gateway'); ?></a></li>
                 </ul>
             </div>
             
@@ -463,7 +463,7 @@ class Jio_Pay_Admin {
             });
             
             $('#test-github-update').on('click', function() {
-                testUpdate('https://api.github.com/repos/techfleek-code/jio-pay/releases/latest');
+                testUpdate('https://api.github.com/repos/jio-pay-wp/woocommerce-plugin/releases/latest');
             });
             
             $('#clear-update-cache').on('click', function() {

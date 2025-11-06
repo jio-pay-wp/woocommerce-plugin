@@ -82,8 +82,8 @@ You can check your HPOS status in the plugin admin page:
 
 1. **Download the Plugin**
    ```bash
-   git clone git@github.com:techfleek-code/jio-pay.git
-   cd jio-pay
+   git clone git@github.com:jio-pay-wp/woocommerce-plugin.git
+   cd woocommerce-plugin
    ```
 
 2. **Upload to WordPress**
@@ -194,8 +194,8 @@ Environment: UAT
 
 1. **Clone Repository**
    ```bash
-   git clone git@github.com:techfleek-code/jio-pay.git
-   cd jio-pay
+   git clone git@github.com:jio-pay-wp/woocommerce-plugin.git
+   cd woocommerce-plugin
    ```
 
 2. **Install in Local WordPress**
@@ -266,7 +266,7 @@ Enable WordPress debug mode and check logs at:
 
 For technical support and questions:
 
-- **GitHub Issues**: https://github.com/techfleek-code/jio-pay/issues
+- **GitHub Issues**: https://github.com/jio-pay-wp/woocommerce-plugin/issues
 - **Documentation**: This README file
 - **WooCommerce Documentation**: https://docs.woocommerce.com/
 
