@@ -21,6 +21,7 @@
 
 if (!defined('ABSPATH')) exit;
 
+
 // Plugin constants
 define('JIO_PAY_VERSION', '1.0.0');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
