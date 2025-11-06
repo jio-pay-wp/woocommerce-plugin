@@ -6,6 +6,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
     // Declare properties to fix PHP 8.2 deprecation warnings
     public $merchant_id;
     public $secret_key;
+    public $agregator_id;
     public $environment;
     public $theme;
     public $payment_method;
@@ -18,8 +19,16 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
         $this->method_description = __('Accept payments using Jio Pay SDK popup.', 'woocommerce');
         $this->has_fields         = false;
         $this->supports           = array(
-            'products'
+            'products',
+            'refunds'
         );
+
+        // Declare HPOS compatibility
+        add_action('before_woocommerce_init', function() {
+            if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+                \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+            }
+        });
 
         $this->init_form_fields();
         $this->init_settings();
@@ -29,6 +38,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
         $this->description  = $this->get_option('description');
         $this->merchant_id  = $this->get_option('merchant_id');
         $this->secret_key   = $this->get_option('secret_key');
+        $this->agregator_id = $this->get_option('agregator_id');
         $this->environment  = $this->get_option('environment');
         $this->theme        = $this->get_option('theme');
         $this->payment_method = $this->get_option('payment_method');
@@ -76,6 +86,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
                 'title'       => __('Secret Key', 'woocommerce'),
                 'type'        => 'text',
                 'description' => __('Your Jio Pay secret key'),
+                'default'     => ''
+            ],
+            'agregator_id' => [
+                'title'       => __('Agregator ID', 'woocommerce'),
+                'type'        => 'text',
+                'description' => __('Your Jio Pay agregator ID'),
                 'default'     => ''
             ],
             'environment' => [

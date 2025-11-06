@@ -1,16 +1,18 @@
 # Jio Pay Gateway for WooCommerce
 
-A complete payment gateway integration that allows WooCommerce stores to accept payments through Jio Pay's secure payment popup system.
+A complete payment gateway integration that allows WooCommerce stores to accept payments through Jio Pay's secure payment popup system. **Fully compatible with WooCommerce High-Performance Order Storage (HPOS)**.
 
 ## 🚀 Features
 
 - **Complete WooCommerce Integration** - Works with both classic and block-based checkout
+- **HPOS Compatible** - Full support for WooCommerce High-Performance Order Storage
 - **Secure Payment Processing** - Uses Jio Pay's official SDK with popup-based payments
 - **Order Management** - Automatic order status updates and payment verification
 - **Multi-Environment Support** - UAT and Live environment configurations
 - **Responsive Design** - Works seamlessly on desktop and mobile devices
 - **Error Handling** - Comprehensive error handling and user feedback
 - **Production Ready** - Clean, optimized code suitable for production environments
+- **Auto-Updates** - Built-in update notification system
 
 ## 📋 Requirements
 
@@ -19,6 +21,13 @@ A complete payment gateway integration that allows WooCommerce stores to accept 
 - **PHP** 7.4 or higher
 - **SSL Certificate** (Required for production)
 - **Jio Pay Merchant Account** with valid credentials
+
+## ✅ WooCommerce Compatibility
+
+- **Traditional Order Storage** ✅ Fully supported
+- **High-Performance Order Storage (HPOS)** ✅ Fully supported
+- **WooCommerce Blocks** ✅ Fully supported
+- **Classic Checkout** ✅ Fully supported
 
 ## 📁 Repository Structure
 
@@ -48,6 +57,24 @@ jio-pay-gateway/
 - **`jio-pay-integration.js`** - Custom integration layer handling checkout events, payment flow, and server communication
 - **`jio-pay-blocks.js`** - React components for WooCommerce block-based checkout
 - **`jio-pay-blocks.asset.php`** - Webpack-generated dependency configuration for block assets
+
+## 🏪 WooCommerce HPOS Compatibility
+
+This plugin is **fully compatible** with WooCommerce's High-Performance Order Storage (HPOS), also known as Custom Order Tables. 
+
+### What is HPOS?
+HPOS is WooCommerce's modern order storage system that uses dedicated database tables instead of WordPress posts for better performance and scalability.
+
+### Compatibility Features
+- ✅ **Automatic Detection** - Plugin automatically detects and adapts to your store's order storage method
+- ✅ **Seamless Migration** - Works with stores transitioning from traditional to HPOS storage
+- ✅ **Performance Optimized** - Uses WooCommerce's recommended APIs for optimal performance
+- ✅ **Future Proof** - Built with WooCommerce's latest standards and best practices
+
+### Checking HPOS Status
+You can check your HPOS status in the plugin admin page:
+- **WooCommerce → Jio Pay Gateway**
+- Look for the "HPOS Compatibility" and "Order Storage" status indicators
 
 ## 🔧 Installation Instructions
 

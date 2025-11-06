@@ -1,13 +1,104 @@
 <?php
 /**
  * Plugin Name: Jio Pay Gateway
- * Description: Accept payments via Jio Pay SDK popup during WooCommerce checkout.
+ * Description: Accept payments via Jio Pay SDK popup during WooCommerce checkout. Compatible with WooCommerce High-Performance Order Storage (HPOS).
  * Version: 1.0.0
- * Author: Your Name
+ * Author: TechFleek
+ * Author URI: https://github.com/techfleek-code
+ * Plugin URI: https://github.com/techfleek-code/jio-pay
+ * Text Domain: jio-pay-gateway
+ * Domain Path: /languages
+ * Requires at least: 5.0
+ * Tested up to: 6.4
+ * Requires PHP: 7.4
+ * WC requires at least: 3.0
+ * WC tested up to: 8.3
  * License: GPL2
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ * Update URI: https://github.com/techfleek-code/jio-pay
+ * Network: false
  */
 
 if (!defined('ABSPATH')) exit;
+
+// Plugin constants
+define('JIO_PAY_VERSION', '1.0.0');
+define('JIO_PAY_PLUGIN_FILE', __FILE__);
+define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
+define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+/**
+ * Check if WooCommerce HPOS is enabled
+ */
+function jio_pay_is_hpos_enabled() {
+    if (class_exists('\Automattic\WooCommerce\Utilities\OrderUtil')) {
+        return \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
+    }
+    return false;
+}
+
+/**
+ * Get order using HPOS-compatible method
+ */
+function jio_pay_get_order($order_id) {
+    if (function_exists('wc_get_order')) {
+        return wc_get_order($order_id);
+    }
+    return false;
+}
+
+/**
+ * Declare compatibility with WooCommerce features
+ */
+add_action('before_woocommerce_init', function() {
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+        // Declare HPOS compatibility
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+        
+        // Declare Cart & Checkout Blocks compatibility
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
+    }
+});
+
+/**
+ * Check WooCommerce compatibility on activation
+ */
+register_activation_hook(__FILE__, function() {
+    if (!class_exists('WooCommerce')) {
+        deactivate_plugins(plugin_basename(__FILE__));
+        wp_die(__('Jio Pay Gateway requires WooCommerce to be installed and active.', 'jio-pay-gateway'));
+    }
+    
+    // Check minimum WooCommerce version
+    if (version_compare(WC_VERSION, '3.0', '<')) {
+        deactivate_plugins(plugin_basename(__FILE__));
+        wp_die(__('Jio Pay Gateway requires WooCommerce version 3.0 or higher.', 'jio-pay-gateway'));
+    }
+});
+
+/**
+ * Initialize the update checker
+ */
+add_action('init', function() {
+    // Include update checker
+    if (!class_exists('Jio_Pay_Update_Checker')) {
+        require_once JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-update-checker.php';
+    }
+    
+    // Initialize update checker
+    $update_checker = new Jio_Pay_Update_Checker(
+        JIO_PAY_PLUGIN_FILE,
+        JIO_PAY_VERSION,
+        'https://api.github.com/repos/techfleek-code/jio-pay/releases/latest'
+    );
+    
+    // Include admin class
+    if (is_admin() && !class_exists('Jio_Pay_Admin')) {
+        require_once JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-admin.php';
+        $admin = new Jio_Pay_Admin();
+        $admin->set_update_checker($update_checker);
+    }
+});
 
 /**
  * Load the payment gateway
@@ -135,6 +226,7 @@ add_action('wp_enqueue_scripts', function() {
             'nonce'         => wp_create_nonce('jio_pay_nonce'),
             'merchant_id'   => $options['merchant_id'] ?? '',
             'environment'   => $options['environment'] ?? 'uat',
+            'agregator_id'  => $options['agregator_id'] ?? '',
             'theme'         => $options['theme'] ?? 'light',
             'payment_method'=> $options['payment_method'] ?? 'all',
             'allowed_payment_types' => $options['allowed_payment_types'] ?? 'all',

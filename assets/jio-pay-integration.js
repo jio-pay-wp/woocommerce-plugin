@@ -152,14 +152,15 @@ jQuery(document).ready(function($) {
         $('body').addClass('processing');
         $('.checkout-button').prop('disabled', true);
         
-        console.log('Initiating Jio Pay payment...', jioPayVars);
+        // console.log('Initiating Jio Pay payment...', jioPayVars);
+        // console.log('Using Agregator ID:', jioPayVars.agregator_id);
         try {
             if (typeof jioPaySDK !== 'undefined') {
                 const paymentOptions = {
                     amount: parseFloat(jioPayVars.amount).toFixed(2) || "1.00",
                     env: jioPayVars.environment || "uat",
                     merchantId: jioPayVars.merchant_id || "JP2000000000031",
-                    aggId: "",
+                    aggId: jioPayVars.agregator_id || "",
                     customerEmailID: jioPayVars.customer_email || "test@jm.com",
                     email: jioPayVars.customer_email || "test@gmail.in",
                     userName: jioPayVars.customer_name || "Test User",
