@@ -229,7 +229,7 @@ class Jio_Pay_Update_Checker {
      */
     private function get_installation_instructions() {
         return '<ol>
-                    <li>Upload the plugin files to <code>/wp-content/plugins/jio-pay-gateway</code></li>
+                    <li>Upload the plugin files to <code>/wp-content/plugins/woo-jiopay</code></li>
                     <li>Activate the plugin through the "Plugins" screen in WordPress</li>
                     <li>Go to <strong>WooCommerce → Settings → Payments</strong></li>
                     <li>Configure <strong>Jio Pay Gateway</strong> with your credentials</li>
@@ -360,7 +360,7 @@ class Jio_Pay_Update_Checker {
         echo '<p>';
         
         printf(
-            __('There is a new version of %1$s available. %2$s or %3$s.', 'jio-pay-gateway'),
+            __('There is a new version of %1$s available. %2$s or %3$s.', 'woo-jiopay'),
             '<strong>' . esc_html($plugin_data['Name']) . '</strong>',
             '<a href="' . esc_url($details_url) . '" class="thickbox open-plugin-details-modal" aria-label="' . esc_attr(sprintf(__('View %s version %s details'), $plugin_data['Name'], $remote_info['version'])) . '">' . sprintf(__('View version %s details'), $remote_info['version']) . '</a>',
             '<a href="' . esc_url($update_url) . '" class="update-link" aria-label="' . esc_attr(sprintf(__('Update %s now'), $plugin_data['Name'])) . '">' . __('Update now') . '</a>'
@@ -388,12 +388,12 @@ class Jio_Pay_Update_Checker {
         
         if ($remote_info && version_compare($this->version, $remote_info['version'], '<')) {
             $update_url = wp_nonce_url(self_admin_url('update.php?action=upgrade-plugin&plugin=' . urlencode($this->plugin_slug)), 'upgrade-plugin_' . $this->plugin_slug);
-            $update_link = '<a href="' . esc_url($update_url) . '" style="color: #d63638; font-weight: bold;">' . __('Update Available', 'jio-pay-gateway') . '</a>';
+            $update_link = '<a href="' . esc_url($update_url) . '" style="color: #d63638; font-weight: bold;">' . __('Update Available', 'woo-jiopay') . '</a>';
             array_unshift($links, $update_link);
         }
         
         // Add settings link
-        $settings_link = '<a href="' . esc_url(admin_url('admin.php?page=jio-pay-gateway')) . '">' . __('Settings', 'jio-pay-gateway') . '</a>';
+        $settings_link = '<a href="' . esc_url(admin_url('admin.php?page=woo-jiopay')) . '">' . __('Settings', 'woo-jiopay') . '</a>';
         array_unshift($links, $settings_link);
         
         return $links;

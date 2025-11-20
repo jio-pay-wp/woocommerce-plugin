@@ -33,7 +33,7 @@ Before starting integration, gather these details from your Jio Pay account:
 
 #### Method B: FTP Upload
 1. Extract the plugin ZIP file
-2. Upload the `jio-pay-gateway` folder to `/wp-content/plugins/`
+2. Upload the `woo-jiopay` folder to `/wp-content/plugins/`
 3. Navigate to **WordPress Admin → Plugins**
 4. Find "Jio Pay Gateway" and click **Activate**
 
@@ -43,11 +43,11 @@ Before starting integration, gather these details from your Jio Pay account:
 cd /path/to/wordpress/wp-content/plugins/
 
 # Download and extract plugin
-wget https://your-domain.com/jio-pay-gateway.zip
-unzip jio-pay-gateway.zip
+wget https://your-domain.com/woo-jiopay.zip
+unzip woo-jiopay.zip
 
 # Set proper permissions
-chmod -R 755 jio-pay-gateway/
+chmod -R 755 woo-jiopay/
 ```
 
 ### Step 2: WooCommerce Configuration
@@ -341,17 +341,17 @@ add_action('init', 'jio_pay_register_strings');
 
 function jio_pay_register_strings() {
     if (function_exists('icl_register_string')) {
-        icl_register_string('jio-pay-gateway', 'Payment Button Text', 'Pay with Jio Pay');
-        icl_register_string('jio-pay-gateway', 'Payment Description', 'Pay securely with Jio Pay');
-        icl_register_string('jio-pay-gateway', 'Success Message', 'Payment completed successfully');
-        icl_register_string('jio-pay-gateway', 'Error Message', 'Payment failed. Please try again.');
+        icl_register_string('woo-jiopay', 'Payment Button Text', 'Pay with Jio Pay');
+        icl_register_string('woo-jiopay', 'Payment Description', 'Pay securely with Jio Pay');
+        icl_register_string('woo-jiopay', 'Success Message', 'Payment completed successfully');
+        icl_register_string('woo-jiopay', 'Error Message', 'Payment failed. Please try again.');
     }
 }
 
 // Use translated strings
 function get_translated_string($string, $default) {
     if (function_exists('icl_t')) {
-        return icl_t('jio-pay-gateway', $string, $default);
+        return icl_t('woo-jiopay', $string, $default);
     }
     return $default;
 }

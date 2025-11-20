@@ -16,7 +16,16 @@ class WC_Jio_Pay_Blocks_Support extends AbstractPaymentMethodType {
     }
 
     public function get_payment_method_script_handles() {
-        $asset_file = include plugin_dir_path( __DIR__ ) . 'assets/jio-pay-blocks.asset.php';
+        $asset_path = plugin_dir_path( __DIR__ ) . 'assets/jio-pay-blocks.asset.php';
+        $asset_file = file_exists( $asset_path ) ? include $asset_path : array(
+            'dependencies' => array(
+                'wc-blocks-registry',
+                'wc-settings',
+                'wp-element',
+                'wp-i18n'
+            ),
+            'version'      => '1.0.0'
+        );
         
         wp_register_script(
             'jio-pay-blocks',
@@ -26,14 +35,24 @@ class WC_Jio_Pay_Blocks_Support extends AbstractPaymentMethodType {
             true
         );
 
+        if ( function_exists( 'wp_set_script_translations' ) ) {
+            wp_set_script_translations( 'jio-pay-blocks', 'woo-jiopay', plugin_dir_path( __DIR__ ) . 'languages' );
+        }
+
         return [ 'jio-pay-blocks' ];
     }
 
     public function get_payment_method_data() {
-        return [
-            'title'       => $this->get_setting( 'title' ),
-            'description' => $this->get_setting( 'description' ),
-            'supports'    => array_filter( ['products'] )
+        $data = [
+            'title'       => $this->get_setting( 'title', __( 'Jio Pay Gateway', 'woo-jiopay' ) ),
+            'description' => $this->get_setting( 'description', __( 'Pay with Jio Pay - Simple, Fast & Secure', 'woo-jiopay' ) ),
+            'supports'    => array( 'products' ),
+            'logo_url'    => '', // Add logo URL if you have one
         ];
+        
+        // Debug log
+        error_log('Jio Pay Blocks - Payment Method Data: ' . print_r($data, true));
+        
+        return $data;
     }
 }

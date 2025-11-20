@@ -1,6 +1,6 @@
 <?php
 /**
- * Jio Pay Gateway Admin Settings
+ * WooCommerce Jio Pay Gateway Admin Settings
  * 
  * Handles admin interface and update management
  */
@@ -40,14 +40,14 @@ class Jio_Pay_Admin {
             'Jio Pay Gateway',
             'Jio Pay Gateway',
             'manage_woocommerce',
-            'jio-pay-gateway',
+            'woo-jiopay',
             array($this, 'admin_page')
         );
         
         // Add debug submenu for testing (only in development)
         if (defined('WP_DEBUG') && WP_DEBUG) {
             add_submenu_page(
-                'jio-pay-gateway',
+                'woo-jiopay',
                 'Update Test',
                 'Update Test',
                 'manage_options',
@@ -83,7 +83,7 @@ class Jio_Pay_Admin {
      * Enqueue admin scripts
      */
     public function enqueue_admin_scripts($hook) {
-        if (strpos($hook, 'jio-pay-gateway') === false) {
+        if (strpos($hook, 'woo-jiopay') === false) {
             return;
         }
         
@@ -98,9 +98,9 @@ class Jio_Pay_Admin {
         wp_localize_script('jio-pay-admin', 'jio_pay_admin', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('jio_pay_admin_nonce'),
-            'checking_text' => __('Checking for updates...', 'jio-pay-gateway'),
-            'no_updates_text' => __('No updates available', 'jio-pay-gateway'),
-            'update_available_text' => __('Update available!', 'jio-pay-gateway')
+            'checking_text' => __('Checking for updates...', 'woo-jiopay'),
+            'no_updates_text' => __('No updates available', 'woo-jiopay'),
+            'update_available_text' => __('Update available!', 'woo-jiopay')
         ));
         
         wp_enqueue_style(
@@ -127,78 +127,78 @@ class Jio_Pay_Admin {
             
             <div class="notice notice-info">
                 <p>
-                    <strong><?php _e('Jio Pay Gateway is active and ready to accept payments.', 'jio-pay-gateway'); ?></strong>
+                    <strong><?php _e('WooCommerce Jio Pay Gateway is active and ready to accept payments.', 'woo-jiopay'); ?></strong>
                 </p>
                 <p>
-                    <?php _e('Configure your payment settings in', 'jio-pay-gateway'); ?> 
+                    <?php _e('Configure your payment settings in', 'woo-jiopay'); ?> 
                     <a href="<?php echo esc_url(admin_url('admin.php?page=wc-settings&tab=checkout&section=jio_pay')); ?>">
-                        <?php _e('WooCommerce → Settings → Payments', 'jio-pay-gateway'); ?>
+                        <?php _e('WooCommerce → Settings → Payments', 'woo-jiopay'); ?>
                     </a>
                 </p>
             </div>
             
             <div class="card">
-                <h2 class="title"><?php _e('Plugin Information', 'jio-pay-gateway'); ?></h2>
+                <h2 class="title"><?php _e('Plugin Information', 'woo-jiopay'); ?></h2>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Current Version', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Current Version', 'woo-jiopay'); ?></th>
                         <td>
                             <code><?php echo esc_html($current_version); ?></code>
                             <span id="jio-pay-update-status" class="<?php echo $is_update_available ? 'update-available' : 'up-to-date'; ?>">
                                 <?php if ($is_update_available): ?>
                                     <span class="dashicons dashicons-update" style="color: #d63638;"></span>
-                                    <?php _e('Update available', 'jio-pay-gateway'); ?>
+                                    <?php _e('Update available', 'woo-jiopay'); ?>
                                 <?php else: ?>
                                     <span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
-                                    <?php _e('Up to date', 'jio-pay-gateway'); ?>
+                                    <?php _e('Up to date', 'woo-jiopay'); ?>
                                 <?php endif; ?>
                             </span>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('Plugin Status', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Plugin Status', 'woo-jiopay'); ?></th>
                         <td>
                             <span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
-                            <?php _e('Active', 'jio-pay-gateway'); ?>
+                            <?php _e('Active', 'woo-jiopay'); ?>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('WooCommerce Status', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('WooCommerce Status', 'woo-jiopay'); ?></th>
                         <td>
                             <?php if (class_exists('WooCommerce')): ?>
                                 <span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
-                                <?php printf(__('Active (v%s)', 'jio-pay-gateway'), WC_VERSION); ?>
+                                <?php printf(__('Active (v%s)', 'woo-jiopay'), WC_VERSION); ?>
                             <?php else: ?>
                                 <span class="dashicons dashicons-warning" style="color: #d63638;"></span>
-                                <?php _e('Not Active', 'jio-pay-gateway'); ?>
+                                <?php _e('Not Active', 'woo-jiopay'); ?>
                             <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('HPOS Compatibility', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('HPOS Compatibility', 'woo-jiopay'); ?></th>
                         <td>
                             <?php if (function_exists('jio_pay_is_hpos_enabled')): ?>
                                 <span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
                                 <?php if (jio_pay_is_hpos_enabled()): ?>
-                                    <?php _e('HPOS Enabled & Compatible', 'jio-pay-gateway'); ?>
+                                    <?php _e('HPOS Enabled & Compatible', 'woo-jiopay'); ?>
                                 <?php else: ?>
-                                    <?php _e('HPOS Compatible (Traditional Storage)', 'jio-pay-gateway'); ?>
+                                    <?php _e('HPOS Compatible (Traditional Storage)', 'woo-jiopay'); ?>
                                 <?php endif; ?>
                             <?php else: ?>
                                 <span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
-                                <?php _e('Compatible', 'jio-pay-gateway'); ?>
+                                <?php _e('Compatible', 'woo-jiopay'); ?>
                             <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('Order Storage', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Order Storage', 'woo-jiopay'); ?></th>
                         <td>
                             <?php if (function_exists('jio_pay_is_hpos_enabled') && jio_pay_is_hpos_enabled()): ?>
                                 <span class="dashicons dashicons-database" style="color: #2271b1;"></span>
-                                <?php _e('High-Performance Order Storage (HPOS)', 'jio-pay-gateway'); ?>
+                                <?php _e('High-Performance Order Storage (HPOS)', 'woo-jiopay'); ?>
                             <?php else: ?>
                                 <span class="dashicons dashicons-wordpress" style="color: #2271b1;"></span>
-                                <?php _e('WordPress Posts Table', 'jio-pay-gateway'); ?>
+                                <?php _e('WordPress Posts Table', 'woo-jiopay'); ?>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -207,60 +207,60 @@ class Jio_Pay_Admin {
                 <p class="submit">
                     <button type="button" id="jio-pay-check-updates" class="button button-secondary">
                         <span class="dashicons dashicons-update"></span>
-                        <?php _e('Check for Updates', 'jio-pay-gateway'); ?>
+                        <?php _e('Check for Updates', 'woo-jiopay'); ?>
                     </button>
                     
                     <?php if ($is_update_available): ?>
                         <a href="<?php echo esc_url(wp_nonce_url(self_admin_url('update.php?action=upgrade-plugin&plugin=' . urlencode(plugin_basename(JIO_PAY_PLUGIN_FILE))), 'upgrade-plugin_' . plugin_basename(JIO_PAY_PLUGIN_FILE))); ?>" class="button button-primary">
                             <span class="dashicons dashicons-download"></span>
-                            <?php _e('Update Now', 'jio-pay-gateway'); ?>
+                            <?php _e('Update Now', 'woo-jiopay'); ?>
                         </a>
                     <?php endif; ?>
                 </p>
             </div>
             
             <div class="card">
-                <h2 class="title"><?php _e('Gateway Configuration', 'jio-pay-gateway'); ?></h2>
+                <h2 class="title"><?php _e('Gateway Configuration', 'woo-jiopay'); ?></h2>
                 <?php 
                 $gateway_settings = get_option('woocommerce_jio_pay_settings', array());
-                $merchant_id = !empty($gateway_settings['merchant_id']) ? $gateway_settings['merchant_id'] : __('Not configured', 'jio-pay-gateway');
-                $agregator_id = !empty($gateway_settings['agregator_id']) ? $gateway_settings['agregator_id'] : __('Not configured', 'jio-pay-gateway');
-                $environment = !empty($gateway_settings['environment']) ? ucfirst($gateway_settings['environment']) : __('Not configured', 'jio-pay-gateway');
+                $merchant_id = !empty($gateway_settings['merchant_id']) ? $gateway_settings['merchant_id'] : __('Not configured', 'woo-jiopay');
+                $agregator_id = !empty($gateway_settings['agregator_id']) ? $gateway_settings['agregator_id'] : __('Not configured', 'woo-jiopay');
+                $environment = !empty($gateway_settings['environment']) ? ucfirst($gateway_settings['environment']) : __('Not configured', 'woo-jiopay');
                 $enabled = isset($gateway_settings['enabled']) && $gateway_settings['enabled'] === 'yes';
                 ?>
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Gateway Status', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Gateway Status', 'woo-jiopay'); ?></th>
                         <td>
                             <?php if ($enabled): ?>
                                 <span class="dashicons dashicons-yes-alt" style="color: #00a32a;"></span>
-                                <?php _e('Enabled', 'jio-pay-gateway'); ?>
+                                <?php _e('Enabled', 'woo-jiopay'); ?>
                             <?php else: ?>
                                 <span class="dashicons dashicons-warning" style="color: #d63638;"></span>
-                                <?php _e('Disabled', 'jio-pay-gateway'); ?>
+                                <?php _e('Disabled', 'woo-jiopay'); ?>
                             <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('Merchant ID', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Merchant ID', 'woo-jiopay'); ?></th>
                         <td>
                             <code><?php echo esc_html($merchant_id); ?></code>
-                            <?php if ($merchant_id === __('Not configured', 'jio-pay-gateway')): ?>
-                                <span style="color: #d63638; margin-left: 10px;"><?php _e('⚠ Required', 'jio-pay-gateway'); ?></span>
+                            <?php if ($merchant_id === __('Not configured', 'woo-jiopay')): ?>
+                                <span style="color: #d63638; margin-left: 10px;"><?php _e('⚠ Required', 'woo-jiopay'); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('Agregator ID', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Agregator ID', 'woo-jiopay'); ?></th>
                         <td>
                             <code><?php echo esc_html($agregator_id); ?></code>
-                            <?php if ($agregator_id === __('Not configured', 'jio-pay-gateway')): ?>
-                                <span style="color: #856404; margin-left: 10px;"><?php _e('⚠ Optional', 'jio-pay-gateway'); ?></span>
+                            <?php if ($agregator_id === __('Not configured', 'woo-jiopay')): ?>
+                                <span style="color: #856404; margin-left: 10px;"><?php _e('⚠ Optional', 'woo-jiopay'); ?></span>
                             <?php endif; ?>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('Environment', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Environment', 'woo-jiopay'); ?></th>
                         <td>
                             <span class="badge badge-<?php echo strtolower($environment); ?>" style="
                                 background: <?php echo $environment === 'Live' ? '#00a32a' : '#d63638'; ?>;
@@ -278,34 +278,34 @@ class Jio_Pay_Admin {
             </div>
             
             <div class="card">
-                <h2 class="title"><?php _e('Documentation & Support', 'jio-pay-gateway'); ?></h2>
-                <p><?php _e('Need help with setup or troubleshooting? Check out our comprehensive documentation.', 'jio-pay-gateway'); ?></p>
+                <h2 class="title"><?php _e('Documentation & Support', 'woo-jiopay'); ?></h2>
+                <p><?php _e('Need help with setup or troubleshooting? Check out our comprehensive documentation.', 'woo-jiopay'); ?></p>
                 
                 <ul style="list-style: disc; margin-left: 20px;">
-                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/README.md" target="_blank"><?php _e('Installation Guide', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/INTEGRATION_GUIDE.md" target="_blank"><?php _e('Integration Guide', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/TROUBLESHOOTING_GUIDE.md" target="_blank"><?php _e('Troubleshooting Guide', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/API_DOCUMENTATION.md" target="_blank"><?php _e('API Documentation', 'jio-pay-gateway'); ?></a></li>
-                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin" target="_blank"><?php _e('GitHub Repository', 'jio-pay-gateway'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/README.md" target="_blank"><?php _e('Installation Guide', 'woo-jiopay'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/INTEGRATION_GUIDE.md" target="_blank"><?php _e('Integration Guide', 'woo-jiopay'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/TROUBLESHOOTING_GUIDE.md" target="_blank"><?php _e('Troubleshooting Guide', 'woo-jiopay'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin/blob/main/docs/API_DOCUMENTATION.md" target="_blank"><?php _e('API Documentation', 'woo-jiopay'); ?></a></li>
+                    <li><a href="https://github.com/jio-pay-wp/woocommerce-plugin" target="_blank"><?php _e('GitHub Repository', 'woo-jiopay'); ?></a></li>
                 </ul>
             </div>
             
             <div class="card">
-                <h2 class="title"><?php _e('Quick Actions', 'jio-pay-gateway'); ?></h2>
+                <h2 class="title"><?php _e('Quick Actions', 'woo-jiopay'); ?></h2>
                 <p>
                     <a href="<?php echo esc_url(admin_url('admin.php?page=wc-settings&tab=checkout&section=jio_pay')); ?>" class="button button-secondary">
                         <span class="dashicons dashicons-admin-settings"></span>
-                        <?php _e('Payment Settings', 'jio-pay-gateway'); ?>
+                        <?php _e('Payment Settings', 'woo-jiopay'); ?>
                     </a>
                     
                     <a href="<?php echo esc_url(admin_url('admin.php?page=wc-orders')); ?>" class="button button-secondary">
                         <span class="dashicons dashicons-list-view"></span>
-                        <?php _e('View Orders', 'jio-pay-gateway'); ?>
+                        <?php _e('View Orders', 'woo-jiopay'); ?>
                     </a>
                     
                     <a href="<?php echo esc_url(admin_url('admin.php?page=wc-reports')); ?>" class="button button-secondary">
                         <span class="dashicons dashicons-chart-bar"></span>
-                        <?php _e('Payment Reports', 'jio-pay-gateway'); ?>
+                        <?php _e('Payment Reports', 'woo-jiopay'); ?>
                     </a>
                 </p>
             </div>
@@ -349,7 +349,7 @@ class Jio_Pay_Admin {
      * Update section callback
      */
     public function update_section_callback() {
-        echo '<p>' . __('Manage automatic updates and version checking.', 'jio-pay-gateway') . '</p>';
+        echo '<p>' . __('Manage automatic updates and version checking.', 'woo-jiopay') . '</p>';
     }
     
     /**
@@ -361,9 +361,9 @@ class Jio_Pay_Admin {
         
         echo '<label for="auto_updates">';
         echo '<input type="checkbox" id="auto_updates" name="jio_pay_admin_options[auto_updates]" value="yes" ' . checked($auto_updates, 'yes', false) . ' />';
-        echo ' ' . __('Enable automatic updates', 'jio-pay-gateway');
+        echo ' ' . __('Enable automatic updates', 'woo-jiopay');
         echo '</label>';
-        echo '<p class="description">' . __('When enabled, the plugin will automatically update to the latest version.', 'jio-pay-gateway') . '</p>';
+        echo '<p class="description">' . __('When enabled, the plugin will automatically update to the latest version.', 'woo-jiopay') . '</p>';
     }
     
     /**
@@ -373,7 +373,7 @@ class Jio_Pay_Admin {
         check_ajax_referer('jio_pay_admin_nonce', 'nonce');
         
         if (!current_user_can('update_plugins')) {
-            wp_die(__('You do not have sufficient permissions.', 'jio-pay-gateway'));
+            wp_die(__('You do not have sufficient permissions.', 'woo-jiopay'));
         }
         
         if ($this->update_checker) {
@@ -383,12 +383,12 @@ class Jio_Pay_Admin {
             wp_send_json_success(array(
                 'update_available' => $is_available,
                 'message' => $is_available ? 
-                    __('Update available! Refresh the page to see details.', 'jio-pay-gateway') :
-                    __('No updates available. You have the latest version.', 'jio-pay-gateway')
+                    __('Update available! Refresh the page to see details.', 'woo-jiopay') :
+                    __('No updates available. You have the latest version.', 'woo-jiopay')
             ));
         } else {
             wp_send_json_error(array(
-                'message' => __('Update checker not available.', 'jio-pay-gateway')
+                'message' => __('Update checker not available.', 'woo-jiopay')
             ));
         }
     }
@@ -406,7 +406,7 @@ class Jio_Pay_Admin {
         // Show success message after update
         if (isset($_GET['updated']) && $_GET['updated'] === 'true') {
             echo '<div class="notice notice-success is-dismissible">
-                    <p><strong>' . __('Jio Pay Gateway updated successfully!', 'jio-pay-gateway') . '</strong></p>
+                    <p><strong>' . __('WooCommerce Jio Pay Gateway updated successfully!', 'woo-jiopay') . '</strong></p>
                   </div>';
         }
     }
@@ -416,39 +416,39 @@ class Jio_Pay_Admin {
      */
     public function update_test_page() {
         if (!defined('WP_DEBUG') || !WP_DEBUG) {
-            wp_die(__('This page is only available in debug mode.', 'jio-pay-gateway'));
+            wp_die(__('This page is only available in debug mode.', 'woo-jiopay'));
         }
         
         ?>
         <div class="wrap">
-            <h1><?php _e('Update System Test', 'jio-pay-gateway'); ?></h1>
+            <h1><?php _e('Update System Test', 'woo-jiopay'); ?></h1>
             
             <div class="card">
-                <h2><?php _e('Test Update Notifications', 'jio-pay-gateway'); ?></h2>
-                <p><?php _e('Use these tools to test the update notification system.', 'jio-pay-gateway'); ?></p>
+                <h2><?php _e('Test Update Notifications', 'woo-jiopay'); ?></h2>
+                <p><?php _e('Use these tools to test the update notification system.', 'woo-jiopay'); ?></p>
                 
                 <table class="form-table">
                     <tr>
-                        <th scope="row"><?php _e('Current Version', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Current Version', 'woo-jiopay'); ?></th>
                         <td><code><?php echo esc_html(JIO_PAY_VERSION); ?></code></td>
                     </tr>
                     <tr>
-                        <th scope="row"><?php _e('Test Server URL', 'jio-pay-gateway'); ?></th>
+                        <th scope="row"><?php _e('Test Server URL', 'woo-jiopay'); ?></th>
                         <td><code><?php echo esc_url(JIO_PAY_PLUGIN_URL . 'test-update-server.php'); ?></code></td>
                     </tr>
                 </table>
                 
                 <p>
                     <button type="button" id="test-local-update" class="button button-secondary">
-                        <?php _e('Test with Local Server (v1.1.0)', 'jio-pay-gateway'); ?>
+                        <?php _e('Test with Local Server (v1.1.0)', 'woo-jiopay'); ?>
                     </button>
                     
                     <button type="button" id="test-github-update" class="button button-secondary">
-                        <?php _e('Test with GitHub API', 'jio-pay-gateway'); ?>
+                        <?php _e('Test with GitHub API', 'woo-jiopay'); ?>
                     </button>
                     
                     <button type="button" id="clear-update-cache" class="button button-secondary">
-                        <?php _e('Clear Update Cache', 'jio-pay-gateway'); ?>
+                        <?php _e('Clear Update Cache', 'woo-jiopay'); ?>
                     </button>
                 </p>
                 
@@ -517,7 +517,7 @@ class Jio_Pay_Admin {
         check_ajax_referer('jio_pay_admin_nonce', 'nonce');
         
         if (!current_user_can('manage_options')) {
-            wp_die(__('You do not have sufficient permissions.', 'jio-pay-gateway'));
+            wp_die(__('You do not have sufficient permissions.', 'woo-jiopay'));
         }
         
         $test_action = sanitize_text_field($_POST['test_action'] ?? '');

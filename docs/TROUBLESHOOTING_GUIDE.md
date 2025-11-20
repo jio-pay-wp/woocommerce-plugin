@@ -110,7 +110,7 @@ jQuery(document).ready(function($) {
 Check if scripts are loaded properly:
 ```html
 <!-- View page source and verify these are present -->
-<script src="/wp-content/plugins/jio-pay-gateway/assets/jio-pay-integration.js"></script>
+<script src="/wp-content/plugins/woo-jiopay/assets/jio-pay-integration.js"></script>
 <script>
 var jio_pay_ajax = {
     "ajax_url": "http://localhost:8080/takneekiinc/wp/wp-admin/admin-ajax.php",
@@ -182,7 +182,7 @@ if ($this->testmode === 'yes') {
 
 #### 1. Check AJAX Handler Registration
 ```php
-// Verify in jio-pay-gateway.php:
+// Verify in woo-jiopay.php:
 add_action('wp_ajax_jio_pay_verify_payment', array($gateway, 'verify_payment'));
 add_action('wp_ajax_nopriv_jio_pay_verify_payment', array($gateway, 'verify_payment'));
 

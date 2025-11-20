@@ -6,7 +6,7 @@
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
- * Text Domain: jio-pay-gateway
+ * Text Domain: woo-jiopay
  * Domain Path: /languages
  * Requires at least: 5.0
  * Tested up to: 6.4
@@ -67,13 +67,13 @@ add_action('before_woocommerce_init', function() {
 register_activation_hook(__FILE__, function() {
     if (!class_exists('WooCommerce')) {
         deactivate_plugins(plugin_basename(__FILE__));
-        wp_die(__('Jio Pay Gateway requires WooCommerce to be installed and active.', 'jio-pay-gateway'));
+        wp_die(__('WooCommerce Jio Pay Gateway requires WooCommerce to be installed and active.', 'woo-jiopay'));
     }
     
     // Check minimum WooCommerce version
     if (version_compare(WC_VERSION, '3.0', '<')) {
         deactivate_plugins(plugin_basename(__FILE__));
-        wp_die(__('Jio Pay Gateway requires WooCommerce version 3.0 or higher.', 'jio-pay-gateway'));
+        wp_die(__('WooCommerce Jio Pay Gateway requires WooCommerce version 3.0 or higher.', 'woo-jiopay'));
     }
 });
 
@@ -105,12 +105,12 @@ add_action('init', function() {
  * Load the payment gateway
  */
 add_action('plugins_loaded', function() {
-    error_log('=== Jio Pay Gateway Plugin Loaded ===');
+    error_log('=== WooCommerce Jio Pay Gateway Plugin Loaded ===');
     
     // Check if WooCommerce is active
     if (!class_exists('WC_Payment_Gateway')) {
         add_action('admin_notices', function() {
-            echo '<div class="notice notice-error"><p>Jio Pay Gateway requires WooCommerce to be active.</p></div>';
+            echo '<div class="notice notice-error"><p>WooCommerce Jio Pay Gateway requires WooCommerce to be active.</p></div>';
         });
         return;
     }
@@ -122,7 +122,7 @@ add_action('plugins_loaded', function() {
 
     // Instantiate the gateway class to register AJAX hooks
     $jio_pay_gateway = new WC_Jio_Pay_Gateway();
-    error_log('=== Jio Pay Gateway Class Instantiated ===');
+    error_log('=== WooCommerce Jio Pay Gateway Class Instantiated ===');
 
     // Register gateway
     add_filter('woocommerce_payment_gateways', function($gateways) {
@@ -226,7 +226,7 @@ add_action('wp_enqueue_scripts', function() {
             'ajax_url'      => admin_url('admin-ajax.php'),
             'nonce'         => wp_create_nonce('jio_pay_nonce'),
             'merchant_id'   => $options['merchant_id'] ?? '',
-            'environment'   => $options['environment'] ?? 'uat',
+            'environment'   => $options['environment'],
             'agregator_id'  => $options['agregator_id'] ?? '',
             'theme'         => $options['theme'] ?? 'light',
             'payment_method'=> $options['payment_method'] ?? 'all',

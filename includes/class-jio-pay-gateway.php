@@ -15,8 +15,8 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
 
     public function __construct() {
         $this->id                 = 'jio_pay';
-        $this->method_title       = __('Jio Pay Gateway', 'woocommerce');
-        $this->method_description = __('Accept payments using Jio Pay SDK popup.', 'woocommerce');
+        $this->method_title       = __('Jio Pay Gateway', 'woo-jiopay');
+        $this->method_description = __('Accept payments using Jio Pay SDK popup.', 'woo-jiopay');
         $this->has_fields         = false;
         $this->supports           = array(
             'products',
@@ -97,7 +97,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway {
             'environment' => [
                 'title'       => __('Environment', 'woocommerce'),
                 'type'        => 'select',
-                'options'     => ['uat' => 'UAT', 'live' => 'Live'],
+                'options'     => ['uat' => 'UAT', 'prod' => 'Live'],
                 'description' => __('Select UAT or Live environment'),
                 'default'     => 'uat'
             ],

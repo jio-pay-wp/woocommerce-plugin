@@ -32,10 +32,10 @@ A complete payment gateway integration that allows WooCommerce stores to accept 
 ## 📁 Repository Structure
 
 ```
-jio-pay-gateway/
-├── jio-pay-gateway.php              # Main plugin file - Entry point and configuration
+woo-jiopay/
+├── woo-jiopay.php              # Main plugin file - Entry point and configuration
 ├── includes/                        # Core functionality classes
-│   ├── class-jio-pay-gateway.php    # Main payment gateway class
+│   ├── class-woo-jiopay.php    # Main payment gateway class
 │   └── class-jio-pay-blocks.php     # WooCommerce Blocks checkout support
 ├── assets/                          # Frontend resources
 │   ├── jio-pay-sdk.js               # Jio Pay SDK library
@@ -48,8 +48,8 @@ jio-pay-gateway/
 ### File Descriptions
 
 #### Core Files
-- **`jio-pay-gateway.php`** - Plugin entry point, handles WordPress hooks, script enqueuing, and gateway registration
-- **`class-jio-pay-gateway.php`** - Main gateway class extending WC_Payment_Gateway, handles admin settings, payment processing, and AJAX endpoints
+- **`woo-jiopay.php`** - Plugin entry point, handles WordPress hooks, script enqueuing, and gateway registration
+- **`class-woo-jiopay.php`** - Main gateway class extending WC_Payment_Gateway, handles admin settings, payment processing, and AJAX endpoints
 - **`class-jio-pay-blocks.php`** - WooCommerce Blocks integration for modern checkout experience
 
 #### Frontend Assets
@@ -87,15 +87,15 @@ You can check your HPOS status in the plugin admin page:
    ```
 
 2. **Upload to WordPress**
-   - Copy the entire `jio-pay-gateway` folder to your WordPress installation:
+   - Copy the entire `woo-jiopay` folder to your WordPress installation:
    ```bash
-   cp -r jio-pay-gateway /path/to/wordpress/wp-content/plugins/
+   cp -r woo-jiopay /path/to/wordpress/wp-content/plugins/
    ```
 
 3. **Set Correct Permissions**
    ```bash
-   chmod -R 755 /path/to/wordpress/wp-content/plugins/jio-pay-gateway
-   chown -R www-data:www-data /path/to/wordpress/wp-content/plugins/jio-pay-gateway
+   chmod -R 755 /path/to/wordpress/wp-content/plugins/woo-jiopay
+   chown -R www-data:www-data /path/to/wordpress/wp-content/plugins/woo-jiopay
    ```
 
 4. **Activate the Plugin**
@@ -107,18 +107,18 @@ You can check your HPOS status in the plugin admin page:
 
 1. **Download and Extract**
    - Download the repository as ZIP
-   - Extract the `jio-pay-gateway` folder
+   - Extract the `woo-jiopay` folder
 
 2. **Upload via FTP**
    - Connect to your website via FTP
-   - Upload the `jio-pay-gateway` folder to `/wp-content/plugins/`
+   - Upload the `woo-jiopay` folder to `/wp-content/plugins/`
 
 3. **Activate via WordPress Admin**
 
 ### Method 3: WordPress Admin Upload
 
 1. **Create ZIP File**
-   - Compress the `jio-pay-gateway` folder into a ZIP file
+   - Compress the `woo-jiopay` folder into a ZIP file
 
 2. **Upload via WordPress**
    - Go to **Plugins → Add New → Upload Plugin**
@@ -200,7 +200,7 @@ Environment: UAT
 
 2. **Install in Local WordPress**
    ```bash
-   ln -s $(pwd)/jio-pay-gateway /path/to/local/wordpress/wp-content/plugins/
+   ln -s $(pwd)/woo-jiopay /path/to/local/wordpress/wp-content/plugins/
    ```
 
 3. **Enable WordPress Debug Mode**

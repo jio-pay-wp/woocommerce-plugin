@@ -69,8 +69,8 @@ find /path/to/wordpress/ -type f -exec chmod 644 {} \;
 chmod 600 wp-config.php
 
 # Plugin directory permissions
-chmod 755 wp-content/plugins/jio-pay-gateway/
-chmod 644 wp-content/plugins/jio-pay-gateway/*.php
+chmod 755 wp-content/plugins/woo-jiopay/
+chmod 644 wp-content/plugins/woo-jiopay/*.php
 ```
 
 ## 🔧 Deployment Methods
@@ -81,7 +81,7 @@ chmod 644 wp-content/plugins/jio-pay-gateway/*.php
 ```bash
 # Create deployment package
 cd /path/to/development/
-zip -r jio-pay-gateway-v1.0.0.zip jio-pay-gateway/ -x "*.git*" "*.DS_Store*" "*node_modules*"
+zip -r woo-jiopay-v1.0.0.zip woo-jiopay/ -x "*.git*" "*.DS_Store*" "*node_modules*"
 ```
 
 #### Step 2: Upload via WordPress Admin
@@ -103,13 +103,13 @@ zip -r jio-pay-gateway-v1.0.0.zip jio-pay-gateway/ -x "*.git*" "*.DS_Store*" "*n
 ```bash
 # Using SFTP
 sftp user@yourserver.com
-put -r jio-pay-gateway/ /path/to/wordpress/wp-content/plugins/
+put -r woo-jiopay/ /path/to/wordpress/wp-content/plugins/
 
 # Using SCP
-scp -r jio-pay-gateway/ user@yourserver.com:/path/to/wordpress/wp-content/plugins/
+scp -r woo-jiopay/ user@yourserver.com:/path/to/wordpress/wp-content/plugins/
 
 # Using rsync (recommended)
-rsync -avz --exclude='.git' --exclude='.DS_Store' jio-pay-gateway/ user@yourserver.com:/path/to/wordpress/wp-content/plugins/jio-pay-gateway/
+rsync -avz --exclude='.git' --exclude='.DS_Store' woo-jiopay/ user@yourserver.com:/path/to/wordpress/wp-content/plugins/woo-jiopay/
 ```
 
 #### Step 2: Set Permissions
@@ -119,15 +119,15 @@ ssh user@yourserver.com
 
 # Set proper permissions
 cd /path/to/wordpress/wp-content/plugins/
-chown -R www-data:www-data jio-pay-gateway/
-chmod -R 755 jio-pay-gateway/
-find jio-pay-gateway/ -name "*.php" -exec chmod 644 {} \;
+chown -R www-data:www-data woo-jiopay/
+chmod -R 755 woo-jiopay/
+find woo-jiopay/ -name "*.php" -exec chmod 644 {} \;
 ```
 
 #### Step 3: Activate Plugin
 ```bash
 # Using WP-CLI
-wp plugin activate jio-pay-gateway
+wp plugin activate woo-jiopay
 
 # Or activate via WordPress Admin
 ```
@@ -138,8 +138,8 @@ wp plugin activate jio-pay-gateway
 ```bash
 # On production server
 cd /path/to/wordpress/wp-content/plugins/
-git clone https://github.com/yourusername/jio-pay-gateway.git
-cd jio-pay-gateway/
+git clone https://github.com/yourusername/woo-jiopay.git
+cd woo-jiopay/
 git checkout main
 ```
 
@@ -268,7 +268,7 @@ define('JIO_PAY_ENVIRONMENT', 'production');
     Deny from All
 </Files>
 
-<Files "jio-pay-gateway.php">
+<Files "woo-jiopay.php">
     Order Allow,Deny
     Allow from All
 </Files>
@@ -291,14 +291,14 @@ define('JIO_PAY_ENVIRONMENT', 'production');
 #### Nginx Configuration
 ```nginx
 # Security configuration for plugin
-location ~* ^/wp-content/plugins/jio-pay-gateway/.*\.(php)$ {
+location ~* ^/wp-content/plugins/woo-jiopay/.*\.(php)$ {
     include fastcgi_params;
     fastcgi_pass php;
     fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
 }
 
 # Block access to sensitive files
-location ~* ^/wp-content/plugins/jio-pay-gateway/.*\.(log|md|json)$ {
+location ~* ^/wp-content/plugins/woo-jiopay/.*\.(log|md|json)$ {
     deny all;
     return 404;
 }
@@ -469,8 +469,8 @@ add_action('jio_pay_payment_complete', function($order_id) {
 
 set -e
 
-BACKUP_DIR="/backups/jio-pay-gateway"
-PLUGIN_DIR="/path/to/wordpress/wp-content/plugins/jio-pay-gateway"
+BACKUP_DIR="/backups/woo-jiopay"
+PLUGIN_DIR="/path/to/wordpress/wp-content/plugins/woo-jiopay"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 echo "Starting rollback to previous version..."
@@ -545,7 +545,7 @@ curl -X POST "https://yourdomain.com/wp-admin/admin-ajax.php" \
 nmap --script ssl-enum-ciphers -p 443 yourdomain.com
 
 # Test for common vulnerabilities
-nikto -h https://yourdomain.com/wp-content/plugins/jio-pay-gateway/
+nikto -h https://yourdomain.com/wp-content/plugins/woo-jiopay/
 ```
 
 #### Performance Testing

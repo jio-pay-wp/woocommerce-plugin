@@ -24,23 +24,30 @@ jQuery(document).ready(function($) {
         }
     }
     
-    // Handle place order button clicks for block checkout
-    $(document).on('click', '#place_order, .wc-block-components-checkout-place-order-button, [data-block-name="woocommerce/checkout-actions-block"] button', function(e) {
-        const selectedPaymentMethod = $('input[name="payment_method"]:checked').val() || 
-                                    $('input[name="radio-control-wc-payment-method-options"]:checked').val();
+    // Use WooCommerce's checkout validation hook instead of click handler
+    // This ensures proper validation before Jio Pay processing
+    $(document.body).on('checkout_place_order_jio_pay', function() {
+        console.log('WooCommerce checkout_place_order_jio_pay triggered');
         
-        if (selectedPaymentMethod === 'jio_pay') {
-            e.preventDefault();
-            e.stopImmediatePropagation();
+        // This hook is called after WooCommerce validation passes
+        // If we return false, it stops the order processing
+        // If we return true, it continues with normal order creation
+        
+        // For classic checkout, we want to intercept here and create order via Jio Pay flow
+        if ($('form.checkout').length && !window.jioPayProcessing) {
+            // Mark that we're processing to avoid loops
+            window.jioPayProcessing = true;
             
-            // For classic checkout, we need to submit the form first to create the order
-            if ($('form.checkout').length && !window.currentOrderId) {
+            // Prevent the default order creation
+            setTimeout(() => {
                 processClassicCheckout();
-            } else {
-                initiateJioPayment();
-            }
-            return false;
+            }, 10);
+            
+            return false; // Stop WooCommerce's default processing
         }
+        
+        // For block checkout or if already processing, continue normally
+        return true;
     });
     
     // Handle form submission for classic checkout
@@ -48,10 +55,14 @@ jQuery(document).ready(function($) {
         const selectedPaymentMethod = $('input[name="payment_method"]:checked').val();
         
         if (selectedPaymentMethod === 'jio_pay') {
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            processClassicCheckout();
-            return false;
+            // Only prevent default if form validation passes
+            if (validateCheckoutForm()) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                processClassicCheckout();
+                return false;
+            }
+            // If validation fails, let the form submit normally to show errors
         }
     });
     
@@ -75,7 +86,138 @@ jQuery(document).ready(function($) {
         });
     };
     
+    // For WooCommerce Blocks, ensure validation happens before order creation
+    // Listen for checkout processing events
+    $(document).on('checkout_place_order_jio_pay', function() {
+        // This event is triggered by WooCommerce before processing the order
+        // Return false to stop processing if validation fails
+        return validateBlocksCheckout();
+    });
+    
+    function validateBlocksCheckout() {
+        // For blocks checkout, WooCommerce handles most validation
+        // But we can add additional custom validation here if needed
+        
+        // Check if Jio Pay is selected and add any custom validation
+        const selectedPaymentMethod = $('input[name="radio-control-wc-payment-method-options"]:checked').val() ||
+                                     $('input[name="payment_method"]:checked').val();
+        
+        if (selectedPaymentMethod === 'jio_pay') {
+            // Add any Jio Pay specific validation here
+            console.log('Jio Pay selected - performing validation...');
+            
+            // For now, let WooCommerce handle the validation
+            // Custom validation can be added here if needed
+            return true;
+        }
+        
+        return true;
+    }
+    
+    // Function to validate checkout form before processing Jio Pay
+    function validateCheckoutForm() {
+        const $form = $('form.checkout');
+        if (!$form.length) return true; // No form to validate
+        
+        // Clear previous errors
+        $('.woocommerce-error, .woocommerce-message').remove();
+        $form.find('input, select, textarea').removeClass('woocommerce-invalid woocommerce-invalid-required-field');
+        
+        let isValid = true;
+        let errors = [];
+        
+        // Check required billing fields
+        const requiredBillingFields = [
+            { field: 'billing_first_name', label: 'First name' },
+            { field: 'billing_last_name', label: 'Last name' },
+            { field: 'billing_email', label: 'Email address' },
+            { field: 'billing_phone', label: 'Phone' },
+            { field: 'billing_address_1', label: 'Street address' },
+            { field: 'billing_city', label: 'Town / City' },
+            { field: 'billing_postcode', label: 'Postcode / ZIP' },
+            { field: 'billing_country', label: 'Country' }
+        ];
+        
+        requiredBillingFields.forEach(function(item) {
+            const $field = $form.find('[name="' + item.field + '"]');
+            if ($field.length && $field.is(':visible')) {
+                const value = $field.val();
+                if (!value || value.trim() === '') {
+                    $field.addClass('woocommerce-invalid woocommerce-invalid-required-field');
+                    errors.push(item.label + ' is a required field.');
+                    isValid = false;
+                }
+            }
+        });
+        
+        // Validate email format
+        const $email = $form.find('[name="billing_email"]');
+        if ($email.length && $email.val()) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test($email.val())) {
+                $email.addClass('woocommerce-invalid woocommerce-invalid-email');
+                errors.push('Please enter a valid email address.');
+                isValid = false;
+            }
+        }
+        
+        // Check if shipping is different and validate shipping fields
+        if ($form.find('#ship-to-different-address-checkbox:checked').length) {
+            const requiredShippingFields = [
+                { field: 'shipping_first_name', label: 'Shipping first name' },
+                { field: 'shipping_last_name', label: 'Shipping last name' },
+                { field: 'shipping_address_1', label: 'Shipping street address' },
+                { field: 'shipping_city', label: 'Shipping town / city' },
+                { field: 'shipping_postcode', label: 'Shipping postcode / ZIP' },
+                { field: 'shipping_country', label: 'Shipping country' }
+            ];
+            
+            requiredShippingFields.forEach(function(item) {
+                const $field = $form.find('[name="' + item.field + '"]');
+                if ($field.length && $field.is(':visible')) {
+                    const value = $field.val();
+                    if (!value || value.trim() === '') {
+                        $field.addClass('woocommerce-invalid woocommerce-invalid-required-field');
+                        errors.push(item.label + ' is a required field.');
+                        isValid = false;
+                    }
+                }
+            });
+        }
+        
+        // Check terms and conditions if present
+        const $terms = $form.find('input[name="terms"]:checkbox');
+        if ($terms.length && !$terms.is(':checked')) {
+            $terms.addClass('woocommerce-invalid');
+            errors.push('You must accept the terms and conditions.');
+            isValid = false;
+        }
+        
+        // Check privacy policy if present
+        const $privacy = $form.find('input[name="privacy_policy"]:checkbox');
+        if ($privacy.length && !$privacy.is(':checked')) {
+            $privacy.addClass('woocommerce-invalid');
+            errors.push('You must accept the privacy policy.');
+            isValid = false;
+        }
+        
+        // Display errors if any
+        if (!isValid && errors.length > 0) {
+            const errorHtml = '<ul class="woocommerce-error" role="alert"><li>' + errors.join('</li><li>') + '</li></ul>';
+            $form.prepend(errorHtml);
+            
+            // Scroll to the error
+            $('html, body').animate({
+                scrollTop: $form.offset().top - 100
+            }, 500);
+        }
+        
+        return isValid;
+    }
+    
     function processClassicCheckout() {
+        console.log('Processing classic checkout for Jio Pay...');
+        
         // Show loading
         $('body').addClass('processing');
         $('.checkout-button').prop('disabled', true);
@@ -131,6 +273,10 @@ jQuery(document).ready(function($) {
                     'Connection Error',
                     'Unable to process checkout due to connection issues.<br><br>Please check your connection and try again.'
                 );
+            })
+            .always(function() {
+                // Reset processing flag
+                window.jioPayProcessing = false;
             });
     }
     
@@ -157,18 +303,18 @@ jQuery(document).ready(function($) {
         try {
             if (typeof jioPaySDK !== 'undefined') {
                 const paymentOptions = {
-                    amount: parseFloat(jioPayVars.amount).toFixed(2) || "1.00",
-                    env: jioPayVars.environment || "uat",
-                    merchantId: jioPayVars.merchant_id || "JP2000000000031",
-                    aggId: jioPayVars.agregator_id || "",
-                    customerEmailID: jioPayVars.customer_email || "test@jm.com",
-                    email: jioPayVars.customer_email || "test@gmail.in",
-                    userName: jioPayVars.customer_name || "Test User",
-                    merchantName: jioPayVars.merchant_name || "Reliance",
+                    amount: parseFloat(jioPayVars.amount).toFixed(2),
+                    env: jioPayVars.environment,
+                    merchantId: jioPayVars.merchant_id,
+                    aggId: jioPayVars.agregator_id,
+                    customerEmailID: jioPayVars.customer_email,
+                    email: jioPayVars.customer_email,
+                    userName: jioPayVars.customer_name,
+                    merchantName: jioPayVars.merchant_name,
                     allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB","UPI_QR","UPI_VPA","CARD"]),
                     theme: jioPayVars.theme || { color: "#E39B2B" },
-                    timeout: jioPayVars.timeout || 30000,
-                    secretKey: jioPayVars.secret_key || "abc",
+                    timeout: jioPayVars.timeout,
+                    secretKey: jioPayVars.secret_key,
                     merchantTrId: Math.floor(1000000000 + Math.random() * 9000000000).toString(),
                     onSuccess: handlePaymentSuccess,
                     onFailure: handlePaymentFailure,
@@ -359,6 +505,9 @@ jQuery(document).ready(function($) {
         // Remove processing states
         $('body').removeClass('processing');
         $('.checkout-button, #place_order').prop('disabled', false);
+        
+        // Reset processing flags
+        window.jioPayProcessing = false;
         
         // Clear any error states
         $('.woocommerce-error, .woocommerce-message').remove();

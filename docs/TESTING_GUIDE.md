@@ -43,8 +43,8 @@ Security Tests                    Performance Tests
 #### Setup Commands
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/jio-pay-gateway.git
-cd jio-pay-gateway
+git clone https://github.com/yourusername/woo-jiopay.git
+cd woo-jiopay
 
 # Install testing dependencies
 npm install --save-dev jest puppeteer @wordpress/env
@@ -107,7 +107,7 @@ define('WP_ACCESSIBLE_HOSTS', 'api.jiopay.com,localhost');
     <filter>
         <whitelist>
             <directory suffix=".php">./includes/</directory>
-            <file>./jio-pay-gateway.php</file>
+            <file>./woo-jiopay.php</file>
         </whitelist>
     </filter>
 </phpunit>
@@ -125,7 +125,7 @@ if (!$_tests_dir) {
 require_once $_tests_dir . '/includes/functions.php';
 
 function _manually_load_plugin() {
-    require dirname(__FILE__) . '/../jio-pay-gateway.php';
+    require dirname(__FILE__) . '/../woo-jiopay.php';
 }
 tests_add_filter('muplugins_loaded', '_manually_load_plugin');
 

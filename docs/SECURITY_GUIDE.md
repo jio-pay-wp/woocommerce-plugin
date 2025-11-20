@@ -59,8 +59,8 @@ find /path/to/wordpress/ -type d -exec chmod 755 {} \;
 chmod 600 wp-config.php
 
 # Plugin directory
-chmod 755 wp-content/plugins/jio-pay-gateway/
-chmod 644 wp-content/plugins/jio-pay-gateway/*.php
+chmod 755 wp-content/plugins/woo-jiopay/
+chmod 644 wp-content/plugins/woo-jiopay/*.php
 ```
 
 ### 2. API Key Management

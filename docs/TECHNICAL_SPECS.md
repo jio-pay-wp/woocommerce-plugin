@@ -241,7 +241,7 @@ Memory: 256MB+ PHP memory limit
 ### File Permissions
 ```bash
 # Plugin directory
-chmod 755 jio-pay-gateway/
+chmod 755 woo-jiopay/
 
 # PHP files
 chmod 644 *.php
