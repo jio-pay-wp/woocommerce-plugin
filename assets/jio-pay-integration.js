@@ -76,6 +76,17 @@ jQuery(document).ready(function($) {
                         // Store order details for success redirect
                         window.currentOrderId = data.order_id;
                         window.currentOrderKey = data.order_key;
+                        
+                        // Store customer data from order if available
+                        if (data.billing_address) {
+                            window.currentCustomerData = {
+                                email: data.billing_address.email || '',
+                                name: (data.billing_address.first_name + ' ' + data.billing_address.last_name).trim(),
+                                phone: data.billing_address.phone || ''
+                            };
+                            console.log('Stored customer data from order:', window.currentCustomerData);
+                        }
+                        
                         setTimeout(() => {
                             initiateJioPaymentWithOrderId(data.order_id);
                         }, 500);
@@ -215,6 +226,44 @@ jQuery(document).ready(function($) {
         return isValid;
     }
     
+    // Function to get current checkout form data
+    function getCheckoutFormData() {
+        const $form = $('form.checkout');
+        let formData = {
+            email: '',
+            name: '',
+            phone: '',
+            address: ''
+        };
+        
+        if ($form.length) {
+            // Get billing information
+            const firstName = $form.find('[name="billing_first_name"]').val() || '';
+            const lastName = $form.find('[name="billing_last_name"]').val() || '';
+            const email = $form.find('[name="billing_email"]').val() || '';
+            const phone = $form.find('[name="billing_phone"]').val() || '';
+            const address1 = $form.find('[name="billing_address_1"]').val() || '';
+            const city = $form.find('[name="billing_city"]').val() || '';
+            const postcode = $form.find('[name="billing_postcode"]').val() || '';
+            
+            formData.email = email.trim();
+            formData.name = (firstName + ' ' + lastName).trim();
+            formData.phone = phone.trim();
+            formData.address = (address1 + ', ' + city + ' ' + postcode).trim().replace(/^,\s*/, '').replace(/,\s*$/, '');
+        } else {
+            // For WooCommerce Blocks, try to get data from different selectors
+            const email = $('[name*="email"]').val() || $('input[type="email"]').val() || '';
+            const firstName = $('[name*="first_name"], [name*="firstName"]').val() || '';
+            const lastName = $('[name*="last_name"], [name*="lastName"]').val() || '';
+            
+            formData.email = email.trim();
+            formData.name = (firstName + ' ' + lastName).trim();
+        }
+        
+        console.log('Extracted form data:', formData);
+        return formData;
+    }
+    
     function processClassicCheckout() {
         console.log('Processing classic checkout for Jio Pay...');
         
@@ -302,14 +351,37 @@ jQuery(document).ready(function($) {
         // console.log('Using Agregator ID:', jioPayVars.agregator_id);
         try {
             if (typeof jioPaySDK !== 'undefined') {
+                // Get customer data - prioritize order data, then form data, then defaults
+                let customerData = {
+                    email: jioPayVars.customer_email,
+                    name: jioPayVars.customer_name
+                };
+                
+                // Use order data if available (from blocks checkout)
+                if (window.currentCustomerData) {
+                    customerData = {
+                        email: window.currentCustomerData.email || customerData.email,
+                        name: window.currentCustomerData.name || customerData.name
+                    };
+                    console.log('Using order customer data:', customerData);
+                } else {
+                    // Fall back to form data (for classic checkout or guest users)
+                    const formData = getCheckoutFormData();
+                    customerData = {
+                        email: formData.email || customerData.email,
+                        name: formData.name || customerData.name
+                    };
+                    console.log('Using form customer data:', customerData);
+                }
+                
                 const paymentOptions = {
                     amount: parseFloat(jioPayVars.amount).toFixed(2),
                     env: jioPayVars.environment,
                     merchantId: jioPayVars.merchant_id,
                     aggId: jioPayVars.agregator_id,
-                    customerEmailID: jioPayVars.customer_email,
-                    email: jioPayVars.customer_email,
-                    userName: jioPayVars.customer_name,
+                    customerEmailID: customerData.email,
+                    email: customerData.email,
+                    userName: customerData.name,
                     merchantName: jioPayVars.merchant_name,
                     allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB","UPI_QR","UPI_VPA","CARD"]),
                     theme: jioPayVars.theme || { color: "#E39B2B" },
@@ -320,6 +392,12 @@ jQuery(document).ready(function($) {
                     onFailure: handlePaymentFailure,
                     onClose: handlePaymentCancel
                 };
+                
+                console.log('Payment Options:', {
+                    customerEmail: paymentOptions.customerEmailID,
+                    userName: paymentOptions.userName,
+                    amount: paymentOptions.amount
+                });
                 
                 const jioPay = new jioPaySDK(paymentOptions);
                 jioPay.open();
@@ -521,6 +599,7 @@ jQuery(document).ready(function($) {
         // Clear order ID to allow new order creation
         window.currentOrderId = null;
         window.currentOrderKey = null;
+        window.currentCustomerData = null;
     }
 
     function handlePaymentSuccess(paymentResult) {
