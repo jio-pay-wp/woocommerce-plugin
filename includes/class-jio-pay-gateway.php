@@ -172,41 +172,23 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
         // Check if we're in test mode (when cart/user data is not available)
         $use_test_data = false;
-        $error_message = '';
-
         if (!is_admin() && WC()->cart) {
-            // Get cart details
             $cart_total = WC()->cart->get_total('');
-            $cart_items_count = WC()->cart->get_cart_contents_count();
             $current_user = wp_get_current_user();
-            $is_logged_in = $current_user->ID > 0;
 
-            // Check WooCommerce guest checkout setting
-            $guest_checkout_enabled = get_option('woocommerce_enable_guest_checkout', 'yes') === 'yes';
-
-            // Validate cart has items and amount is greater than 0
-            if ($cart_items_count <= 0) {
+            // If checkout amount is not available or user is logged out, we're in test mode
+            if (empty($cart_total) || $cart_total <= 0 || $current_user->ID <= 0) {
                 $use_test_data = true;
-                $error_message = __('Your cart is empty. Please add items to your cart before proceeding.', 'woocommerce');
-            } elseif (empty($cart_total) || floatval($cart_total) <= 0) {
-                $use_test_data = true;
-                $error_message = __('Cart total must be greater than zero.', 'woocommerce');
-            } elseif (!$is_logged_in && !$guest_checkout_enabled) {
-                // Guest checkout is disabled by admin
-                $use_test_data = true;
-                $error_message = __('You must be logged in to place an order. Guest checkout is disabled.', 'woocommerce');
             }
-            // If logged in OR (guest AND guest checkout enabled), allow payment
         } else {
             // Cart not available - test mode
             $use_test_data = true;
-            $error_message = __('Cart is not available. Please refresh the page.', 'woocommerce');
         }
 
-        // Show error/warning message if applicable
-        if ($use_test_data && !empty($error_message)) {
-            echo '<div class="woocommerce-error" style="padding: 10px; background: #e2401c; color: #fff; border-radius: 3px; margin: 10px 0;">';
-            echo esc_html($error_message);
+        // Show test mode warning if applicable
+        if ($use_test_data) {
+            echo '<div class="jio-pay-test-mode-notice">';
+            echo __('Test Mode: Using sample data because cart amount or user information is not available. Real payment will not be processed.', 'woocommerce');
             echo '</div>';
         }
 
@@ -219,41 +201,14 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     {
         $order = wc_get_order($order_id);
         if (!$order) {
-            wc_add_notice(__('Order not found.', 'woocommerce'), 'error');
             return [
                 'result' => 'failure',
                 'messages' => 'Order not found.'
             ];
         }
 
-        // Validate cart has items and amount > 0
-        if (!WC()->cart || WC()->cart->get_cart_contents_count() <= 0) {
-            wc_add_notice(__('Your cart is empty.', 'woocommerce'), 'error');
-            return ['result' => 'failure'];
-        }
-
-        $order_total = $order->get_total();
-        if (empty($order_total) || floatval($order_total) <= 0) {
-            wc_add_notice(__('Order total must be greater than zero.', 'woocommerce'), 'error');
-            return ['result' => 'failure'];
-        }
-
-        // Check guest checkout permission
-        $current_user = wp_get_current_user();
-        $is_logged_in = $current_user->ID > 0;
-        $guest_checkout_enabled = get_option('woocommerce_enable_guest_checkout', 'yes') === 'yes';
-
-        if (!$is_logged_in && !$guest_checkout_enabled) {
-            wc_add_notice(__('You must be logged in to place an order. Guest checkout is disabled.', 'woocommerce'), 'error');
-            return ['result' => 'failure'];
-        }
-
-        // All validations passed - set order status to pending payment
+        // Set order status to pending payment
         $order->update_status('pending', __('Awaiting Jio Pay payment.', 'woocommerce'));
-
-        // Add note about user type for tracking
-        $user_type = $is_logged_in ? 'Logged-in user (ID: ' . $current_user->ID . ')' : 'Guest user';
-        $order->add_order_note(sprintf(__('Payment initiated by %s', 'woocommerce'), $user_type));
 
         // Return success for JavaScript to handle the popup
         return [
@@ -326,35 +281,19 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             } else {
                 error_log('No order ID provided, searching for recent orders...');
 
-                // Try to find recent order (works for both logged-in and guest users)
+                // Try to find recent order
                 $current_user = wp_get_current_user();
-                $user_id = $current_user->ID;
-
-                // Build query args
-                $query_args = [
+                $orders = wc_get_orders([
+                    'customer' => $current_user->ID,
                     'status' => ['pending', 'on-hold'],
                     'payment_method' => 'jio_pay',
                     'limit' => 1,
                     'orderby' => 'date',
                     'order' => 'DESC'
-                ];
-
-                // If user is logged in, search by customer ID
-                // If guest, search all recent pending orders (will match by session/email later)
-                if ($user_id > 0) {
-                    $query_args['customer'] = $user_id;
-                    error_log('Searching orders for logged-in user: ' . $user_id);
-                } else {
-                    error_log('Searching orders for guest user');
-                    // For guest, we'll get the most recent pending order
-                    // In production, you might want to match by billing email or session
-                }
-
-                $orders = wc_get_orders($query_args);
+                ]);
 
                 if (empty($orders)) {
-                    $user_type = $user_id > 0 ? 'logged-in user: ' . $user_id : 'guest user';
-                    error_log('No pending orders found for ' . $user_type);
+                    error_log('No pending orders found for user: ' . $current_user->ID);
                     wp_send_json_error(['message' => 'No pending order found']);
                     wp_die();
                 }
