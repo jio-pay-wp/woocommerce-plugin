@@ -19,7 +19,8 @@
  * Network: false
  */
 
-if (!defined('ABSPATH')) exit;
+if (!defined('ABSPATH'))
+    exit;
 
 
 // Plugin constants
@@ -31,7 +32,8 @@ define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
 /**
  * Check if WooCommerce HPOS is enabled
  */
-function jio_pay_is_hpos_enabled() {
+function jio_pay_is_hpos_enabled()
+{
     if (class_exists('\Automattic\WooCommerce\Utilities\OrderUtil')) {
         return \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled();
     }
@@ -41,7 +43,8 @@ function jio_pay_is_hpos_enabled() {
 /**
  * Get order using HPOS-compatible method
  */
-function jio_pay_get_order($order_id) {
+function jio_pay_get_order($order_id)
+{
     if (function_exists('wc_get_order')) {
         return wc_get_order($order_id);
     }
@@ -51,11 +54,11 @@ function jio_pay_get_order($order_id) {
 /**
  * Declare compatibility with WooCommerce features
  */
-add_action('before_woocommerce_init', function() {
+add_action('before_woocommerce_init', function () {
     if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
         // Declare HPOS compatibility
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
-        
+
         // Declare Cart & Checkout Blocks compatibility
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
     }
@@ -64,12 +67,12 @@ add_action('before_woocommerce_init', function() {
 /**
  * Check WooCommerce compatibility on activation
  */
-register_activation_hook(__FILE__, function() {
+register_activation_hook(__FILE__, function () {
     if (!class_exists('WooCommerce')) {
         deactivate_plugins(plugin_basename(__FILE__));
         wp_die(__('WooCommerce Jio Pay Gateway requires WooCommerce to be installed and active.', 'woo-jiopay'));
     }
-    
+
     // Check minimum WooCommerce version
     if (version_compare(WC_VERSION, '3.0', '<')) {
         deactivate_plugins(plugin_basename(__FILE__));
@@ -80,19 +83,19 @@ register_activation_hook(__FILE__, function() {
 /**
  * Initialize the update checker
  */
-add_action('init', function() {
+add_action('init', function () {
     // Include update checker
     if (!class_exists('Jio_Pay_Update_Checker')) {
         require_once JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-update-checker.php';
     }
-    
+
     // Initialize update checker
     $update_checker = new Jio_Pay_Update_Checker(
         JIO_PAY_PLUGIN_FILE,
         JIO_PAY_VERSION,
         'https://api.github.com/repos/jio-pay-wp/woocommerce-plugin/releases/latest'
     );
-    
+
     // Include admin class
     if (is_admin() && !class_exists('Jio_Pay_Admin')) {
         require_once JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-admin.php';
@@ -104,12 +107,12 @@ add_action('init', function() {
 /**
  * Load the payment gateway
  */
-add_action('plugins_loaded', function() {
+add_action('plugins_loaded', function () {
     error_log('=== WooCommerce Jio Pay Gateway Plugin Loaded ===');
-    
+
     // Check if WooCommerce is active
     if (!class_exists('WC_Payment_Gateway')) {
-        add_action('admin_notices', function() {
+        add_action('admin_notices', function () {
             echo '<div class="notice notice-error"><p>WooCommerce Jio Pay Gateway requires WooCommerce to be active.</p></div>';
         });
         return;
@@ -125,7 +128,7 @@ add_action('plugins_loaded', function() {
     error_log('=== WooCommerce Jio Pay Gateway Class Instantiated ===');
 
     // Register gateway
-    add_filter('woocommerce_payment_gateways', function($gateways) {
+    add_filter('woocommerce_payment_gateways', function ($gateways) {
         $gateways[] = 'WC_Jio_Pay_Gateway';
         return $gateways;
     });
@@ -134,11 +137,11 @@ add_action('plugins_loaded', function() {
 /**
  * Add support for WooCommerce Blocks
  */
-add_action('woocommerce_blocks_loaded', function() {
+add_action('woocommerce_blocks_loaded', function () {
     if (class_exists('Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType')) {
         require_once plugin_dir_path(__FILE__) . 'includes/class-jio-pay-blocks.php';
-        
-        add_action('woocommerce_blocks_payment_method_type_registration', function($payment_method_registry) {
+
+        add_action('woocommerce_blocks_payment_method_type_registration', function ($payment_method_registry) {
             $payment_method_registry->register(new WC_Jio_Pay_Blocks_Support());
         });
     }
@@ -147,7 +150,7 @@ add_action('woocommerce_blocks_loaded', function() {
 /**
  * Enqueue SDK and Integration JS on Checkout page
  */
-add_action('wp_enqueue_scripts', function() {
+add_action('wp_enqueue_scripts', function () {
     if (is_checkout()) {
         wp_enqueue_script(
             'jio-pay-sdk',
@@ -190,18 +193,18 @@ add_action('wp_enqueue_scripts', function() {
 
         // Get plugin settings
         $options = get_option('woocommerce_jio_pay_settings', []);
-        
+
         // Get cart/order data for payment
         $total = '0.00';
         $customer_email = '';
         $customer_name = '';
         $use_test_data = false;
-        
+
         // Check if cart and user info are available
         if (!is_admin() && WC()->cart) {
             $cart_total = WC()->cart->get_total('');
             $current_user = wp_get_current_user();
-            
+
             // If checkout amount is available and user is logged in with valid info
             if (!empty($cart_total) && $cart_total > 0 && $current_user->ID > 0) {
                 $total = $cart_total;
@@ -223,22 +226,22 @@ add_action('wp_enqueue_scripts', function() {
         }
 
         wp_localize_script('jio-pay-integration', 'jioPayVars', [
-            'ajax_url'      => admin_url('admin-ajax.php'),
-            'nonce'         => wp_create_nonce('jio_pay_nonce'),
-            'merchant_id'   => $options['merchant_id'] ?? '',
-            'environment'   => $options['environment'],
-            'agregator_id'  => $options['agregator_id'] ?? '',
-            'theme'         => $options['theme'] ?? 'light',
-            'payment_method'=> $options['payment_method'] ?? 'all',
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('jio_pay_nonce'),
+            'merchant_id' => $options['merchant_id'] ?? '',
+            'environment' => $options['environment'],
+            'agregator_id' => $options['agregator_id'] ?? '',
+            'theme' => $options['theme'] ?? 'light',
+            'payment_method' => $options['payment_method'] ?? 'all',
             'allowed_payment_types' => $options['allowed_payment_types'] ?? 'all',
-            'timeout'       => intval($options['timeout'] ?? 30000),
-            'secret_key'   => $options['secret_key'] ?? '',
-            'amount'        => $total,
+            'timeout' => intval($options['timeout'] ?? 30000),
+            'secret_key' => $options['secret_key'] ?? '',
+            'amount' => $total,
             'customer_email' => $customer_email,
             'customer_name' => $customer_name,
             'use_test_data' => $use_test_data,
             'merchant_name' => get_bloginfo('name'),
-            'return_url'    => home_url('/checkout/order-received/')
+            'return_url' => add_query_arg('action', 'jio_pay_return_handler', admin_url('admin-ajax.php'))
         ]);
     }
 });
