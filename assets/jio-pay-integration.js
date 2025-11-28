@@ -1,15 +1,5 @@
 jQuery(document).ready(function ($) {
 
-    // Test AJAX connection
-    // console.log('Testing AJAX connection...');
-    // $.post(jioPayVars.ajax_url, {
-    //     action: 'jio_pay_test',
-    //     test_data: 'hello'
-    // }).done(function(response) {
-    //     console.log('AJAX test successful:', response);
-    // }).fail(function(xhr, status, error) {
-    //     console.error('AJAX test failed:', xhr, status, error);
-    // });
 
     // Check for test payment completion message
     const urlParams = new URLSearchParams(window.location.search);
@@ -730,6 +720,11 @@ jQuery(document).ready(function ($) {
                 'Payment Cancelled',
                 'Your payment was cancelled.<br><br>You can try again when you\'re ready to complete your order.'
             );
+
+            setTimeout(() => {
+                //Reload the page
+                window.location.reload();
+            }, 2000);
         }
     }
 
