@@ -18,9 +18,10 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     public function __construct()
     {
         $this->id = 'jio_pay';
-        $this->method_title = __('Jio Pay Gateway', 'woo-jiopay');
-        $this->method_description = __('Accept payments using Jio Pay SDK popup.', 'woo-jiopay');
+        $this->method_title = __('Jio Payments Solutions Ltd.', 'woo-jiopay');
+        $this->method_description = __('The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.', 'woo-jiopay');
         $this->has_fields = false;
+        $this->icon = JIO_PAY_PLUGIN_URL . 'assets/jio-pay-logo.png';
         $this->supports = array(
             'products',
             'refunds'

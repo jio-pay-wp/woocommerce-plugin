@@ -1,7 +1,7 @@
 <?php
 /**
- * Plugin Name: Jio Pay Gateway
- * Description: Accept payments via Jio Pay SDK popup during WooCommerce checkout. Compatible with WooCommerce High-Performance Order Storage (HPOS).
+ * Plugin Name: Jio Payments Solutions Ltd.
+ * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
  * Version: 1.0.0
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
