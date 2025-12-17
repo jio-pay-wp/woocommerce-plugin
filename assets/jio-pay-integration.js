@@ -1,5 +1,7 @@
 jQuery(document).ready(function ($) {
 
+    // Flag to track if payment has been handled (success or failure)
+    window.jioPaymentHandled = false;
 
     // Check for test payment completion message
     const urlParams = new URLSearchParams(window.location.search);
@@ -369,6 +371,9 @@ jQuery(document).ready(function ($) {
 
                 // Store merchant transaction ID for later reference
                 window.currentMerchantTrId = merchantTrId;
+                
+                // Reset payment handled flag before opening payment
+                window.jioPaymentHandled = false;
 
                 const paymentOptions = {
                     amount: parseFloat(jioPayVars.amount).toFixed(2),
@@ -616,8 +621,11 @@ jQuery(document).ready(function ($) {
     }
 
     function handlePaymentSuccess(paymentResult) {
-        //console.log('Payment successful:', paymentResult);
-
+        console.log('Payment success callback triggered');
+        
+        // Immediately mark payment as handled to prevent onClose from firing
+        window.jioPaymentHandled = true;
+        
         // Show loading while verifying
         $('body').addClass('processing');
 
@@ -692,6 +700,11 @@ jQuery(document).ready(function ($) {
     }
 
     function handlePaymentFailure(error) {
+        console.log('Payment failure callback triggered');
+        
+        // Immediately mark payment as handled to prevent onClose from firing
+        window.jioPaymentHandled = true;
+        
         refreshCheckoutForRetry();
 
         if (jioPayVars.use_test_data) {
@@ -708,9 +721,22 @@ jQuery(document).ready(function ($) {
     }
 
     function handlePaymentCancel() {
-        refreshCheckoutForRetry();
+        console.log('Payment cancel/close callback triggered, flag status:', window.jioPaymentHandled);
+        
+        // Add a small delay to allow success/failure callbacks to set the flag first
+        setTimeout(function() {
+            // Only handle if payment wasn't already processed (success/failure)
+            if (window.jioPaymentHandled) {
+                console.log('Payment already handled, ignoring onClose callback');
+                return;
+            }
 
-        if (jioPayVars.use_test_data) {
+            // Mark as handled to prevent multiple calls
+            window.jioPaymentHandled = true;
+            
+            refreshCheckoutForRetry();
+
+            if (jioPayVars.use_test_data) {
             showInfoNotification(
                 'Test Payment Cancelled',
                 'The test payment was cancelled by the user.<br><br>You can try again to continue testing the payment flow.'
@@ -725,7 +751,8 @@ jQuery(document).ready(function ($) {
                 //Reload the page
                 window.location.reload();
             }, 2000);
-        }
+            }
+        }, 100); // Small delay to let success/failure callbacks execute first
     }
 
     function showTestModeNotification() {
