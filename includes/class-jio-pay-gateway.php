@@ -40,16 +40,26 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         // Load merchant configs
         $this->title = $this->get_option('title');
         $this->description = $this->get_option('description');
-        $this->merchant_id = $this->get_option('merchant_id');
-        $this->secret_key = $this->get_option('secret_key');
-        $this->agregator_id = $this->get_option('agregator_id');
-        $this->environment = $this->get_option('environment');
+        $this->environment = $this->get_option('environment', 'uat');
+        
+        // Load credentials based on selected environment
+        if ($this->environment === 'prod') {
+            $this->merchant_id = $this->get_option('live_merchant_id');
+            $this->secret_key = $this->get_option('live_secret_key');
+            $this->agregator_id = $this->get_option('live_agregator_id');
+        } else {
+            $this->merchant_id = $this->get_option('uat_merchant_id');
+            $this->secret_key = $this->get_option('uat_secret_key');
+            $this->agregator_id = $this->get_option('uat_agregator_id');
+        }
+        
         $this->theme = $this->get_option('theme');
         $this->payment_method = $this->get_option('payment_method');
         $this->allowed_payment_types = $this->get_option('allowed_payment_types');
         $this->timeout = $this->get_option('timeout');
 
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
+        add_action('woocommerce_admin_field_environment_status', [$this, 'generate_environment_status_html']);
 
         // AJAX endpoints
         add_action('wp_ajax_jio_pay_create_session', [$this, 'create_session']);
@@ -85,30 +95,70 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'description' => __('Description shown during checkout', 'woocommerce'),
                 'default' => __('Pay securely via Jio Pay popup', 'woocommerce')
             ],
-            'merchant_id' => [
-                'title' => __('Merchant ID', 'woocommerce'),
-                'type' => 'text',
-                'description' => __('Your Jio Pay merchant ID'),
-                'default' => ''
-            ],
-            'secret_key' => [
-                'title' => __('Secret Key', 'woocommerce'),
-                'type' => 'text',
-                'description' => __('Your Jio Pay secret key'),
-                'default' => ''
-            ],
-            'agregator_id' => [
-                'title' => __('Agregator ID', 'woocommerce'),
-                'type' => 'text',
-                'description' => __('Your Jio Pay agregator ID'),
-                'default' => ''
-            ],
             'environment' => [
                 'title' => __('Environment', 'woocommerce'),
                 'type' => 'select',
-                'options' => ['uat' => 'UAT', 'prod' => 'Live'],
-                'description' => __('Select UAT or Live environment'),
-                'default' => 'uat'
+                'options' => ['uat' => 'UAT (Testing)', 'prod' => 'Live (Production)'],
+                'description' => __('Select environment - Switch between UAT and Live without overwriting credentials', 'woocommerce'),
+                'default' => 'uat',
+                'desc_tip' => true
+            ],
+            'uat_credentials_section' => [
+                'title' => __('UAT (Testing) Credentials', 'woocommerce'),
+                'type' => 'title',
+                'description' => __('Configure your UAT/Testing environment credentials. These will be used when Environment is set to UAT.', 'woocommerce'),
+            ],
+            'uat_merchant_id' => [
+                'title' => __('UAT Merchant ID', 'woocommerce'),
+                'type' => 'text',
+                'description' => __('Your Jio Pay UAT merchant ID', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true
+            ],
+            'uat_secret_key' => [
+                'title' => __('UAT Secret Key', 'woocommerce'),
+                'type' => 'password',
+                'description' => __('Your Jio Pay UAT secret key', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true
+            ],
+            'uat_agregator_id' => [
+                'title' => __('UAT Agregator ID', 'woocommerce'),
+                'type' => 'text',
+                'description' => __('Your Jio Pay UAT agregator ID', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true
+            ],
+            'live_credentials_section' => [
+                'title' => __('Live (Production) Credentials', 'woocommerce'),
+                'type' => 'title',
+                'description' => __('Configure your Live/Production environment credentials. These will be used when Environment is set to Live.', 'woocommerce'),
+            ],
+            'live_merchant_id' => [
+                'title' => __('Live Merchant ID', 'woocommerce'),
+                'type' => 'text',
+                'description' => __('Your Jio Pay Live merchant ID', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true
+            ],
+            'live_secret_key' => [
+                'title' => __('Live Secret Key', 'woocommerce'),
+                'type' => 'password',
+                'description' => __('Your Jio Pay Live secret key', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true
+            ],
+            'live_agregator_id' => [
+                'title' => __('Live Agregator ID', 'woocommerce'),
+                'type' => 'text',
+                'description' => __('Your Jio Pay Live agregator ID', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true
+            ],
+            'payment_options_section' => [
+                'title' => __('Payment Options', 'woocommerce'),
+                'type' => 'title',
+                'description' => __('Configure payment methods and display options', 'woocommerce'),
             ],
             'theme' => [
                 'title' => __('Theme (JSON)', 'woocommerce'),
@@ -148,6 +198,41 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'default' => '1000'
             ]
         ];
+    }
+
+    /**
+     * Display admin options with environment indicator
+     */
+    public function admin_options()
+    {
+        $current_env = $this->get_option('environment', 'uat');
+        $env_label = $current_env === 'prod' ? 'Live (Production)' : 'UAT (Testing)';
+        $env_color = $current_env === 'prod' ? '#dc3232' : '#46b450';
+        ?>
+        <h2><?php echo esc_html($this->get_method_title()); ?></h2>
+        <?php echo wp_kses_post(wpautop($this->get_method_description())); ?>
+        
+        <p style="font-size: 15px; margin: 20px 0;">
+            <strong>Current Active Environment:</strong> 
+            <span style="color: <?php echo esc_attr($env_color); ?>; font-weight: bold; font-size: 16px;">
+                <?php echo esc_html($env_label); ?>
+            </span>
+        </p>
+        
+        <?php if ($current_env === 'prod'): ?>
+        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; margin: 20px 0;">
+            <strong>⚠️ Warning:</strong> You are in LIVE/PRODUCTION mode. Real transactions will be processed.
+        </div>
+        <?php else: ?>
+        <div style="background: #d1ecf1; border-left: 4px solid #0c5460; padding: 12px; margin: 20px 0;">
+            <strong>ℹ️ Info:</strong> You are in UAT/TESTING mode. Use test credentials for testing.
+        </div>
+        <?php endif; ?>
+        
+        <table class="form-table">
+            <?php $this->generate_settings_html(); ?>
+        </table>
+        <?php
     }
 
     /**

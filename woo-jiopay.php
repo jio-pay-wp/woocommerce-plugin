@@ -105,6 +105,35 @@ add_action('init', function () {
 });
 
 /**
+ * Add admin styles for Jio Pay settings page
+ */
+add_action('admin_head', function() {
+    $screen = get_current_screen();
+    if ($screen && strpos($screen->id, 'wc-settings') !== false && isset($_GET['section']) && $_GET['section'] === 'jio_pay') {
+        ?>
+        <style>
+            .woocommerce table.form-table th[scope="row"] {
+                padding: 15px 0;
+            }
+            .woocommerce table.form-table tr[valign="top"] > th[colspan="2"] {
+                background: #f0f0f1;
+                padding: 12px 15px;
+                font-size: 14px;
+                font-weight: 600;
+                color: #1d2327;
+            }
+            .woocommerce table.form-table tr[valign="top"] > th[colspan="2"] + td {
+                padding: 0;
+            }
+            input[type="password"] {
+                font-family: 'Courier New', monospace;
+            }
+        </style>
+        <?php
+    }
+});
+
+/**
  * Load the payment gateway
  */
 add_action('plugins_loaded', function () {
@@ -193,6 +222,18 @@ add_action('wp_enqueue_scripts', function () {
 
         // Get plugin settings
         $options = get_option('woocommerce_jio_pay_settings', []);
+        
+        // Determine which environment credentials to use
+        $environment = $options['environment'] ?? 'uat';
+        if ($environment === 'prod') {
+            $merchant_id = $options['live_merchant_id'] ?? '';
+            $secret_key = $options['live_secret_key'] ?? '';
+            $agregator_id = $options['live_agregator_id'] ?? '';
+        } else {
+            $merchant_id = $options['uat_merchant_id'] ?? '';
+            $secret_key = $options['uat_secret_key'] ?? '';
+            $agregator_id = $options['uat_agregator_id'] ?? '';
+        }
 
         // Get cart/order data for payment
         $total = '0.00';
@@ -228,14 +269,14 @@ add_action('wp_enqueue_scripts', function () {
         wp_localize_script('jio-pay-integration', 'jioPayVars', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('jio_pay_nonce'),
-            'merchant_id' => $options['merchant_id'] ?? '',
-            'environment' => $options['environment'],
-            'agregator_id' => $options['agregator_id'] ?? '',
+            'merchant_id' => $merchant_id,
+            'environment' => $environment,
+            'agregator_id' => $agregator_id,
             'theme' => $options['theme'] ?? 'light',
             'payment_method' => $options['payment_method'] ?? 'all',
             'allowed_payment_types' => $options['allowed_payment_types'] ?? 'all',
             'timeout' => intval($options['timeout'] ?? 30000),
-            'secret_key' => $options['secret_key'] ?? '',
+            'secret_key' => $secret_key,
             'amount' => $total,
             'customer_email' => $customer_email,
             'customer_name' => $customer_name,
