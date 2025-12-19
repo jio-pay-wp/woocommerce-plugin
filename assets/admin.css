@@ -1,0 +1,349 @@
+/**
+ * Jio Pay Gateway Admin Styles
+ */
+
+/* Main admin page styling */
+.jio-pay-admin .wrap {
+    max-width: 1200px;
+}
+
+.jio-pay-admin .card {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+    margin: 20px 0;
+    padding: 20px;
+}
+
+.jio-pay-admin .card h2.title {
+    margin: 0 0 15px 0;
+    padding: 0 0 10px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 18px;
+    font-weight: 600;
+}
+
+/* Version badge */
+.title-count {
+    background: #2271b1;
+    color: white;
+    border-radius: 10px;
+    padding: 3px 8px;
+    font-size: 12px;
+    font-weight: normal;
+    margin-left: 10px;
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Update status indicators */
+#jio-pay-update-status {
+    margin-left: 10px;
+    font-weight: 500;
+}
+
+#jio-pay-update-status.update-available {
+    color: #d63638;
+}
+
+#jio-pay-update-status.up-to-date {
+    color: #00a32a;
+}
+
+/* Button styling */
+.button .dashicons {
+    vertical-align: middle;
+    margin-right: 5px;
+    margin-top: -2px;
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.button-primary .dashicons {
+    color: inherit;
+}
+
+.button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Status icons */
+.status-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    color: white;
+    font-size: 12px;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.status-icon.active {
+    background-color: #00a32a;
+}
+
+.status-icon.inactive {
+    background-color: #d63638;
+}
+
+.status-icon.warning {
+    background-color: #dba617;
+}
+
+/* Form table improvements */
+.form-table th {
+    font-weight: 600;
+    color: #23282d;
+}
+
+.form-table td {
+    vertical-align: top;
+    padding: 15px 10px 15px 0;
+}
+
+.form-table tr:hover {
+    background-color: #f9f9f9;
+}
+
+/* Documentation links */
+.documentation-links {
+    list-style: none;
+    padding: 0;
+}
+
+.documentation-links li {
+    margin: 8px 0;
+    padding: 5px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.documentation-links li:last-child {
+    border-bottom: none;
+}
+
+.documentation-links a {
+    text-decoration: none;
+    color: #2271b1;
+    font-weight: 500;
+}
+
+.documentation-links a:hover {
+    color: #135e96;
+    text-decoration: underline;
+}
+
+.documentation-links a::before {
+    content: "📄";
+    margin-right: 8px;
+}
+
+/* Quick actions */
+.quick-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.quick-actions .button {
+    flex: 0 0 auto;
+}
+
+/* Notice styling */
+.jio-pay-admin-notice {
+    border-left-width: 4px;
+    border-left-style: solid;
+    margin: 15px 0;
+    padding: 12px;
+    background: #fff;
+    box-shadow: 0 1px 1px 0 rgba(0,0,0,.1);
+}
+
+.jio-pay-admin-notice.notice-success {
+    border-left-color: #00a32a;
+}
+
+.jio-pay-admin-notice.notice-error {
+    border-left-color: #d63638;
+}
+
+.jio-pay-admin-notice.notice-warning {
+    border-left-color: #dba617;
+}
+
+.jio-pay-admin-notice.notice-info {
+    border-left-color: #72aee6;
+}
+
+/* Loading spinner */
+.dashicons.spin {
+    animation: jio-pay-spin 1s linear infinite;
+}
+
+@keyframes jio-pay-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Debug information */
+#jio-pay-debug-info {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 15px;
+    margin: 15px 0;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+#jio-pay-debug-info pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Responsive design */
+@media screen and (max-width: 782px) {
+    .jio-pay-admin .card {
+        margin: 10px 0;
+        padding: 15px;
+    }
+    
+    .form-table th,
+    .form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .form-table th {
+        border-bottom: none;
+        font-weight: 600;
+    }
+    
+    .quick-actions {
+        flex-direction: column;
+    }
+    
+    .quick-actions .button {
+        width: 100%;
+        text-align: center;
+        margin: 5px 0;
+    }
+    
+    .title-count {
+        display: block;
+        margin: 5px 0;
+        text-align: center;
+        width: fit-content;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .jio-pay-admin .wrap {
+        margin: 10px;
+    }
+    
+    .jio-pay-admin .card {
+        border-radius: 0;
+        margin: 10px -10px;
+    }
+}
+
+/* WordPress admin color scheme compatibility */
+.admin-color-light .title-count {
+    background: #04a4cc;
+}
+
+.admin-color-blue .title-count {
+    background: #52accc;
+}
+
+.admin-color-coffee .title-count {
+    background: #59524c;
+}
+
+.admin-color-ectoplasm .title-count {
+    background: #523f6d;
+}
+
+.admin-color-midnight .title-count {
+    background: #e14d43;
+}
+
+.admin-color-ocean .title-count {
+    background: #9ebaa0;
+}
+
+.admin-color-sunrise .title-count {
+    background: #dd823b;
+}
+
+/* Plugin list page styling */
+.plugins .jio-pay-update-notice {
+    background: #fff3cd;
+    border-left: 4px solid #856404;
+    padding: 10px;
+    margin: 5px 0;
+}
+
+.plugins .jio-pay-update-notice p {
+    margin: 0;
+}
+
+.plugins .jio-pay-update-notice .button {
+    margin-left: 10px;
+}
+
+/* Animation for status changes */
+.status-transition {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Accessibility improvements */
+.button:focus,
+.button-primary:focus,
+.button-secondary:focus {
+    box-shadow: 0 0 0 2px #2271b1;
+    outline: none;
+}
+
+.screen-reader-text {
+    border: 0;
+    clip: rect(1px, 1px, 1px, 1px);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+    word-wrap: normal;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .jio-pay-admin .card {
+        border: 2px solid #000;
+    }
+    
+    .title-count {
+        background: #000;
+        color: #fff;
+        border: 1px solid #fff;
+    }
+    
+    #jio-pay-update-status.update-available {
+        color: #000;
+        font-weight: bold;
+    }
+}
