@@ -246,13 +246,21 @@ add_action('wp_enqueue_scripts', function () {
             $cart_total = WC()->cart->get_total('');
             $current_user = wp_get_current_user();
 
-            // If checkout amount is available and user is logged in with valid info
-            if (!empty($cart_total) && $cart_total > 0 && $current_user->ID > 0) {
+            // Check if we have valid cart amount
+            if (!empty($cart_total) && $cart_total > 0) {
                 $total = $cart_total;
-                $customer_email = $current_user->user_email;
-                $customer_name = $current_user->display_name;
+                
+                // For logged-in users, use their info
+                if ($current_user->ID > 0) {
+                    $customer_email = $current_user->user_email;
+                    $customer_name = $current_user->display_name;
+                } else {
+                    // For guest users, use placeholder (will be collected at checkout)
+                    $customer_email = 'guest@checkout.com';
+                    $customer_name = 'Guest User';
+                }
             } else {
-                // Use test data if checkout amount is not available or user is logged out
+                // Use test data if checkout amount is not available
                 $use_test_data = true;
                 $total = '1.00';
                 $customer_email = 'test@example.com';
