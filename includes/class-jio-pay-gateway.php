@@ -2,6 +2,14 @@
 if (!defined('ABSPATH'))
     exit;
 
+// Show merchantTrId in WooCommerce admin order details (after class definition)
+add_action('woocommerce_admin_order_data_after_order_details', function($order) {
+    $merchant_tr_id = $order->get_meta('_jio_pay_merchant_tr_id');
+    if ($merchant_tr_id) {
+        echo '<div style="clear:both;"></div><div style="margin-top: 10px;"><p><strong>Merchant Transaction Id:</strong> <span style="color:#0073aa;">' . esc_html($merchant_tr_id) . '</span></p></div>';
+    }
+});
+
 class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 {
 
@@ -72,6 +80,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         add_action('wp_ajax_nopriv_jio_pay_store_merchant_tr_id', [$this, 'store_merchant_tr_id']);
         add_action('wp_ajax_jio_pay_test', [$this, 'test_ajax']);
         add_action('wp_ajax_nopriv_jio_pay_test', [$this, 'test_ajax']);
+
     }
 
     public function init_form_fields()
@@ -746,4 +755,6 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         wp_send_json_success(['message' => 'AJAX is working correctly', 'data' => $_POST]);
         wp_die();
     }
+
+    
 }
