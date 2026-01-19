@@ -384,6 +384,7 @@ jQuery(document).ready(function ($) {
                     email: customerData.email,
                     userName: customerData.name,
                     merchantName: jioPayVars.merchant_name,
+                    merchantLogo: jioPayVars.merchantLogo || '',
                     allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB", "UPI_QR", "UPI_VPA", "CARD"]),
                     theme: jioPayVars.theme || { color: "#E39B2B" },
                     timeout: jioPayVars.timeout,
