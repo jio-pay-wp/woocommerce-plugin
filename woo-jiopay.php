@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 1.1.1
+ * Version: 1.1.4
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '1.1.1');
+define('JIO_PAY_VERSION', '1.1.4');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -43,7 +43,7 @@ function jio_pay_is_hpos_enabled()
 
 /**
  * Get order using HPOS-compatible method
- */
+*/
 function jio_pay_get_order($order_id)
 {
     if (function_exists('wc_get_order')) {
@@ -187,15 +187,22 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-sdk',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-sdk.js',
             [],
-            '1.1.1',
+            '1.1.4',
             true
         );
 
+        // Dependencies for integration script
+        // Include 'wc-checkout' for classic checkout compatibility
+        $integration_deps = ['jquery', 'jio-pay-sdk'];
+        if (wp_script_is('wc-checkout', 'registered') || !wp_doing_ajax()) {
+            $integration_deps[] = 'wc-checkout';
+        }
+        
         wp_enqueue_script(
             'jio-pay-integration',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-integration.js',
-            ['jquery', 'jio-pay-sdk'],
-            '1.1.1',
+            $integration_deps,
+            '1.1.4',
             true
         );
 

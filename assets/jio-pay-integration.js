@@ -61,6 +61,9 @@ jQuery(document).ready(function ($) {
 
     // Flag to track if payment has been handled (success or failure)
     window.jioPaymentHandled = false;
+    
+    // Flag to track if we've attached our handlers
+    window.jioPayHandlersAttached = false;
 
     // Check for test payment completion message
     const urlParams = new URLSearchParams(window.location.search);
@@ -75,14 +78,57 @@ jQuery(document).ready(function ($) {
         }
     }
 
-    // Use WooCommerce's checkout validation hook instead of click handler
-    // This ensures proper validation before Jio Pay processing
-    $(document.body).on('checkout_place_order_jio_pay', function () {
-        console.log('WooCommerce checkout_place_order_jio_pay triggered');
+    // ============================================
+    // CLASSIC CHECKOUT HANDLING
+    // ============================================
+    
+    // Log checkout type for debugging
+    console.log('[JioPay] Initializing - Blocks checkout:', !!document.querySelector('.wc-block-checkout'));
+    console.log('[JioPay] Initializing - Classic checkout form:', !!document.querySelector('form.checkout'));
+    console.log('[JioPay] Initializing - Order review form:', !!document.querySelector('form#order_review'));
 
-        // This hook is called after WooCommerce validation passes
-        // If we return false, it stops the order processing
-        // If we return true, it continues with normal order creation
+    // Function to check if Jio Pay is selected
+    function isJioPaySelected() {
+        // Check multiple possible selectors for payment method
+        const selectedMethod = $('input[name="payment_method"]:checked').val() ||
+                               $('input[name="radio-control-wc-payment-method-options"]:checked').val();
+        console.log('[JioPay] Selected payment method:', selectedMethod);
+        return selectedMethod === 'jio_pay';
+    }
+
+    // Use WooCommerce's checkout validation hook - THIS IS THE PRIMARY HANDLER FOR CLASSIC CHECKOUT
+    // This event is triggered by WooCommerce's checkout.js when the form is about to be submitted
+    $(document.body).on('checkout_place_order', function () {
+        console.log('[JioPay] checkout_place_order event triggered');
+        
+        // Only intercept if Jio Pay is selected
+        if (!isJioPaySelected()) {
+            console.log('[JioPay] Jio Pay not selected, allowing normal checkout');
+            return true;
+        }
+        
+        console.log('[JioPay] Jio Pay is selected, intercepting checkout');
+        
+        // For classic checkout, we want to intercept and create order via Jio Pay flow
+        if ($('form.checkout').length && !window.jioPayProcessing) {
+            // Mark that we're processing to avoid loops
+            window.jioPayProcessing = true;
+
+            // Process classic checkout
+            setTimeout(() => {
+                processClassicCheckout();
+            }, 10);
+
+            return false; // Stop WooCommerce's default AJAX processing
+        }
+
+        // For block checkout or if already processing, continue normally
+        return true;
+    });
+    
+    // Also listen to the specific jio_pay event (fallback)
+    $(document.body).on('checkout_place_order_jio_pay', function () {
+        console.log('[JioPay] checkout_place_order_jio_pay triggered');
 
         // For classic checkout, we want to intercept here and create order via Jio Pay flow
         if ($('form.checkout').length && !window.jioPayProcessing) {
@@ -101,17 +147,53 @@ jQuery(document).ready(function ($) {
         return true;
     });
 
-    // Handle form submission for classic checkout (main checkout page)
+    // Handle form submission for classic checkout (backup handler)
+    // Using high priority by attaching directly to the form
     $(document).on('submit', 'form.checkout', function (e) {
-        const selectedPaymentMethod = $('input[name="payment_method"]:checked').val();
-        if (selectedPaymentMethod === 'jio_pay') {
-            if (validateCheckoutForm()) {
-                e.preventDefault();
-                e.stopImmediatePropagation();
-                processClassicCheckout();
-                return false;
-            }
+        console.log('[JioPay] form.checkout submit event');
+        
+        if (!isJioPaySelected()) {
+            return true;
         }
+        
+        // If we're already processing, allow the form to continue
+        if (window.jioPayProcessing) {
+            console.log('[JioPay] Already processing, skipping submit handler');
+            return true;
+        }
+        
+        // Validate and process
+        if (validateCheckoutForm()) {
+            console.log('[JioPay] Validation passed, intercepting form submission');
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            window.jioPayProcessing = true;
+            processClassicCheckout();
+            return false;
+        }
+        
+        return true;
+    });
+    
+    // Handle Place Order button click (earliest interception point for classic checkout)
+    $(document).on('click', '#place_order, .wc-block-components-checkout-place-order-button', function (e) {
+        console.log('[JioPay] Place Order button clicked');
+        
+        if (!isJioPaySelected()) {
+            console.log('[JioPay] Jio Pay not selected');
+            return true;
+        }
+        
+        // For WooCommerce Blocks, let the fetch interceptor handle it
+        if (document.querySelector('.wc-block-checkout')) {
+            console.log('[JioPay] Blocks checkout detected, letting fetch handle it');
+            return true;
+        }
+        
+        // For classic checkout, we'll let the form submit handler or WC event handler catch it
+        // This is just for logging
+        console.log('[JioPay] Classic checkout - will be handled by checkout event');
     });
 
     // Handle form submission for order-pay/pay-for-order page (form#order_review)
@@ -150,6 +232,10 @@ jQuery(document).ready(function ($) {
         }   
     });
 
+    // ============================================
+    // BLOCKS CHECKOUT HANDLING (REST API)
+    // ============================================
+    
     // Monitor for WooCommerce REST API responses (block checkout)
     let originalFetch = window.fetch;
     window.fetch = function (...args) {
@@ -180,6 +266,74 @@ jQuery(document).ready(function ($) {
             return response;
         });
     };
+    
+    // ============================================
+    // CLASSIC CHECKOUT AJAX INTERCEPTOR
+    // ============================================
+    // WooCommerce Classic checkout uses jQuery AJAX, not fetch
+    // We need to intercept BEFORE WooCommerce processes the response
+    
+    // Use ajaxPrefilter to modify the AJAX request and intercept response
+    $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
+        // Only intercept WooCommerce checkout AJAX calls
+        if (options.url && (options.url.includes('wc-ajax=checkout') || options.url.includes('action=woocommerce_checkout'))) {
+            
+            // Check if Jio Pay is selected BEFORE the request
+            if (!isJioPaySelected()) {
+                console.log('[JioPay] Not Jio Pay, skipping intercept');
+                return;
+            }
+            
+            console.log('[JioPay] Intercepting WooCommerce checkout AJAX');
+            
+            // Store the original success callback
+            var originalSuccess = options.success;
+            
+            // Replace the success callback
+            options.success = function(response, textStatus, jqXHR) {
+                console.log('[JioPay] Checkout AJAX response intercepted:', response);
+                
+                // Check if order was created successfully
+                if (response && response.result === 'success') {
+                    // Get order ID - it might be in redirect URL or directly in response
+                    var orderId = null;
+                    
+                    if (response.order_id) {
+                        orderId = response.order_id;
+                    } else if (response.redirect) {
+                        var orderIdMatch = response.redirect.match(/order-received\/(\d+)/);
+                        if (orderIdMatch) {
+                            orderId = parseInt(orderIdMatch[1]);
+                        }
+                    }
+                    
+                    if (orderId) {
+                        console.log('[JioPay] Order created successfully, ID:', orderId);
+                        
+                        // Store order ID
+                        window.currentOrderId = orderId;
+                        
+                        // Remove processing state
+                        $('body').removeClass('processing');
+                        $('.blockUI').remove();
+                        
+                        // DO NOT call the original success - this prevents WooCommerce from redirecting
+                        // Instead, initiate Jio Pay payment
+                        setTimeout(() => {
+                            initiateJioPayment();
+                        }, 100);
+                        
+                        return; // Don't call original success
+                    }
+                }
+                
+                // For failures or non-Jio Pay responses, call original success
+                if (originalSuccess) {
+                    originalSuccess.call(this, response, textStatus, jqXHR);
+                }
+            };
+        }
+    });
 
     // For WooCommerce Blocks, ensure validation happens before order creation
     // Listen for checkout processing events
@@ -351,19 +505,39 @@ jQuery(document).ready(function ($) {
     }
 
     function processClassicCheckout() {
-        console.log('Processing classic checkout for Jio Pay...');
+        console.log('[JioPay] Processing classic checkout for Jio Pay...');
 
         // Show loading
         $('body').addClass('processing');
-        $('.checkout-button').prop('disabled', true);
+        $('.checkout-button, #place_order').prop('disabled', true);
 
         // Get form data
         const $form = $('form.checkout');
         const formData = $form.serialize();
+        
+        // Determine the correct checkout URL
+        // Priority: 1. wc_checkout_params (if available), 2. form action, 3. wc-ajax endpoint
+        let checkoutUrl;
+        if (typeof wc_checkout_params !== 'undefined' && wc_checkout_params.checkout_url) {
+            checkoutUrl = wc_checkout_params.checkout_url;
+        } else if ($form.attr('action') && $form.attr('action') !== '') {
+            checkoutUrl = $form.attr('action');
+        } else {
+            // Fallback to wc-ajax endpoint
+            checkoutUrl = '?wc-ajax=checkout';
+        }
+        
+        console.log('[JioPay] Submitting to checkout URL:', checkoutUrl);
 
         // Submit the checkout form to create the order
-        $.post($form.attr('action') || wc_checkout_params.checkout_url, formData)
-            .done(function (response) {
+        $.ajax({
+            type: 'POST',
+            url: checkoutUrl,
+            data: formData,
+            dataType: 'json',
+            success: function (response) {
+                console.log('[JioPay] Checkout response:', response);
+                
                 if (response.result === 'success') {
                     // Order created successfully, extract order ID from redirect URL
                     const redirectUrl = response.redirect;
@@ -371,7 +545,7 @@ jQuery(document).ready(function ($) {
 
                     if (orderIdMatch) {
                         window.currentOrderId = parseInt(orderIdMatch[1]);
-                        console.log('Order created with ID:', window.currentOrderId);
+                        console.log('[JioPay] Order created with ID:', window.currentOrderId);
 
                         // Now initiate Jio Pay payment
                         setTimeout(() => {
@@ -406,18 +580,20 @@ jQuery(document).ready(function ($) {
                         );
                     }
                 }
-            })
-            .fail(function () {
+            },
+            error: function (xhr, status, error) {
+                console.error('[JioPay] Checkout AJAX error:', status, error);
                 refreshCheckoutForRetry();
                 showErrorNotification(
                     'Connection Error',
                     'Unable to process checkout due to connection issues.<br><br>Please check your connection and try again.'
                 );
-            })
-            .always(function () {
+            },
+            complete: function () {
                 // Reset processing flag
                 window.jioPayProcessing = false;
-            });
+            }
+        });
     }
 
     // Function to handle order-pay page (pay for existing order)
@@ -428,10 +604,21 @@ jQuery(document).ready(function ($) {
         $('body').addClass('processing');
         $('#place_order').prop('disabled', true);
 
-        // Get order ID from URL parameters
+        // Get order ID from URL - handle both permalink formats:
+        // 1. Pretty permalinks: /checkout/order-pay/123/?key=wc_order_xxx
+        // 2. Query string format: /checkout/?order-pay=123&key=wc_order_xxx
         const urlParams = new URLSearchParams(window.location.search);
-        const orderId = urlParams.get('order-pay');
+        let orderId = urlParams.get('order-pay');
         const orderKey = urlParams.get('key');
+
+        // If not found in query params, try to extract from URL path (pretty permalinks)
+        if (!orderId) {
+            const pathMatch = window.location.pathname.match(/\/order-pay\/(\d+)/);
+            if (pathMatch && pathMatch[1]) {
+                orderId = pathMatch[1];
+                console.log('[JioPay] Order ID extracted from URL path:', orderId);
+            }
+        }
 
         console.log('[JioPay] Order ID from URL:', orderId, 'Order Key:', orderKey);
 
@@ -946,22 +1133,44 @@ jQuery(document).ready(function ($) {
             refreshCheckoutForRetry();
 
             if (jioPayVars.use_test_data) {
-            showInfoNotification(
-                'Test Payment Cancelled',
-                'The test payment was cancelled by the user.<br><br>You can try again to continue testing the payment flow.'
-            );
-        } else {
-            showInfoNotification(
-                'Payment Cancelled',
-                'Your payment was cancelled.<br><br>You can try again when you\'re ready to complete your order.'
-            );
+                showInfoNotification(
+                    'Test Payment Cancelled',
+                    'The test payment was cancelled by the user.<br><br>You can try again to continue testing the payment flow.'
+                );
+            } else {
+                showInfoNotification(
+                    'Payment Cancelled',
+                    'Your payment was cancelled.<br><br>You can try again when you\'re ready to complete your order.'
+                );
 
-            setTimeout(() => {
-                //Reload the page
-                window.location.reload();
-            }, 2000);
+                setTimeout(() => {
+                    // Remove beforeunload handlers to prevent "Changes may not be saved" dialog
+                    removeBeforeUnloadHandlers();
+                    
+                    // Reload the page
+                    window.location.reload();
+                }, 2000);
             }
         }, 100); // Small delay to let success/failure callbacks execute first
+    }
+    
+    // Helper function to remove beforeunload event handlers
+    // This prevents the "Changes that you made may not be saved" dialog
+    function removeBeforeUnloadHandlers() {
+        // Remove jQuery beforeunload handlers
+        $(window).off('beforeunload');
+        
+        // Also try to remove native handlers by setting onbeforeunload to null
+        window.onbeforeunload = null;
+        
+        // WooCommerce specific - reset the form change flag
+        if (typeof wc_checkout_form !== 'undefined' && wc_checkout_form) {
+            wc_checkout_form.dirtyInput = false;
+        }
+        
+        // Mark the form as not dirty/changed
+        $('form.checkout').data('dirty', false);
+        $('form.checkout').removeClass('dirty');
     }
 
     function showTestModeNotification() {
