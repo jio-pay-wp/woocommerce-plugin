@@ -710,7 +710,7 @@ jQuery(document).ready(function ($) {
                     timeout: jioPayVars.timeout,
                     secretKey: jioPayVars.secret_key,
                     merchantTrId: merchantTrId,
-                    returnURL: jioPayVars.return_url, // Return URL for POST callback
+                    returnURL: '', //jioPayVars.return_url, // Return URL for POST callback
                     onSuccess: handlePaymentSuccess,
                     onFailure: handlePaymentFailure,
                     onClose: handlePaymentCancel
