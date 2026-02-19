@@ -22,6 +22,9 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     public $payment_method;
     public $allowed_payment_types;
     public $timeout;
+    
+    // Static flag to prevent duplicate hook registration
+    private static $hooks_registered = false;
 
     public function __construct()
     {
@@ -81,6 +84,19 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         add_action('wp_ajax_jio_pay_test', [$this, 'test_ajax']);
         add_action('wp_ajax_nopriv_jio_pay_test', [$this, 'test_ajax']);
 
+        // Refund endpoints (admin only)
+        add_action('wp_ajax_jio_pay_process_refund', [$this, 'ajax_process_refund']);
+        add_action('wp_ajax_jio_pay_get_refund_status', [$this, 'ajax_get_refund_status']);
+        // Status check endpoint
+        add_action('wp_ajax_jio_pay_check_status', [$this, 'ajax_check_status']);
+        // Admin refund status check with auto-update
+        add_action('wp_ajax_jio_pay_check_update_refund_status', [$this, 'ajax_check_and_update_refund_status']);
+
+        // Add admin hooks for refund UI (only once)
+        if (!self::$hooks_registered) {
+            add_action('woocommerce_admin_order_data_after_order_details', [$this, 'add_refund_button']);
+            self::$hooks_registered = true;
+        }
     }
 
     public function init_form_fields()
@@ -753,6 +769,270 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     public function test_ajax()
     {
         wp_send_json_success(['message' => 'AJAX is working correctly', 'data' => $_POST]);
+        wp_die();
+    }
+
+    /**
+     * Display refund button on order details page
+     */
+    public function add_refund_button($order)
+    {
+        if ($order->get_payment_method() !== 'jio_pay') {
+            return;
+        }
+
+        // Check if order can be refunded
+        if (!class_exists('WC_Jio_Pay_Refund')) {
+            require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
+        }
+
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        
+        // AUTO-CHECK REFUND STATUS FIRST if order is on-hold with pending refund
+        $refund_merchant_txn_no = $order->get_meta('_jio_pay_refund_merchant_txn_no');
+        if ($refund_merchant_txn_no && $order->get_status() === 'on-hold') {
+            // Check status from gateway
+            $response = $refund_handler->check_refund_status($refund_merchant_txn_no);
+            
+            // If refund is confirmed successful, update order to refunded
+            if ($response['success'] && isset($response['txnStatus']) && $response['txnStatus'] === 'SUC') {
+                $order->set_status('refunded');
+                $order->save();
+                
+                // Add order note
+                $order->add_order_note(
+                    sprintf(
+                        'Refund auto-confirmed: Transaction ID: %s, Refund ID: %s (confirmed on page load)',
+                        sanitize_text_field($response['merchant_txn_no'] ?? 'N/A'),
+                        sanitize_text_field($response['refund_id'] ?? 'N/A')
+                    )
+                );
+            }
+        }
+        
+        $can_refund = $refund_handler->can_refund_order($order->get_id());
+        $refund_history = WC_Jio_Pay_Refund::get_refund_history($order->get_id());
+
+        echo '<div style="margin-top: 15px; padding: 12px; background: #f9f9f9; border-left: 4px solid #0073aa; border-radius: 4px;">';
+        echo '<h3 style="margin-top: 0;">Jio Pay Refund</h3>';
+
+        // Status message area
+        echo '<div id="jio_pay_refund_status_' . $order->get_id() . '" style="display:none; margin-bottom:12px; padding:10px; border-radius:4px; background:#e7f3ff; color:#0073aa; border:1px solid #0073aa;"></div>';
+
+        // Show refund button or status message
+        if ($can_refund['can_refund']) {
+            echo '<button type="button" class="button button-primary jio-pay-refund-btn" data-order-id="' . $order->get_id() . '" style="background:#d32f2f;border-color:#d32f2f;">Process Refund</button>';
+        } else {
+            echo '<p><strong>Refund Status:</strong> ' . esc_html($can_refund['reason']) . '</p>';
+            
+            // If refund was attempted and order is NOT already refunded, show check status button
+            if (!empty($refund_history) && $order->get_status() !== 'refunded') {
+                $refund_merchant_txn_no = $order->get_meta('_jio_pay_refund_merchant_txn_no');
+                if ($refund_merchant_txn_no) {
+                    echo '<button type="button" class="button jio-pay-status-btn" data-type="refund" data-order-id="' . $order->get_id() . '" data-merchant-txn-no="' . esc_attr($refund_merchant_txn_no) . '" data-nonce="' . wp_create_nonce('jio_pay_status_nonce') . '" style="margin-top:10px;width:100%;background:#00b3b3;color:#fff;border:none;cursor:pointer;">Check Refund Status</button>';
+                }
+            }
+        }
+
+        // Status check for order (if has merchantTxnNo and authId - for all statuses including success)
+        $merchant_tr_id = $order->get_meta('_jio_pay_merchant_tr_id');
+        $auth_id = $order->get_transaction_id();
+        if ($merchant_tr_id && $auth_id) {
+            echo '<button type="button" class="button jio-pay-status-btn" data-type="order" data-order-id="' . $order->get_id() . '" data-merchant-txn-no="' . esc_attr($merchant_tr_id) . '" data-auth-id="' . esc_attr($auth_id) . '" data-nonce="' . wp_create_nonce('jio_pay_status_nonce') . '" style="margin-top:10px;width:100%;background:#00b3b3;color:#fff;border:none;cursor:pointer;">Check Order Status</button>';
+        }
+
+        echo '</div>';
+
+        // Enqueue refund script
+        $this->enqueue_admin_refund_script($order->get_id());
+    }
+
+
+    /**
+     * Enqueue admin refund script
+     */
+    private function enqueue_admin_refund_script($order_id)
+    {
+        wp_enqueue_script(
+            'jio-pay-refund-admin',
+            JIO_PAY_PLUGIN_URL . 'assets/jio-pay-refund-admin.js',
+            ['jquery'],
+            '1.0',
+            true
+        );
+
+        wp_enqueue_script(
+            'jio-pay-status-admin',
+            JIO_PAY_PLUGIN_URL . 'assets/jio-pay-status-admin.js',
+            ['jquery'],
+            '1.0',
+            true
+        );
+
+        wp_localize_script('jio-pay-refund-admin', 'jio_pay_refund', [
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('jio_pay_refund_nonce'),
+            'order_id' => $order_id
+        ]);
+    }
+
+    /**
+     * AJAX: Process refund request
+     */
+    public function ajax_process_refund()
+    {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'jio_pay_refund_nonce')) {
+            wp_send_json_error(['message' => 'Security check failed']);
+            wp_die();
+        }
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(['message' => 'You do not have permission']);
+            wp_die();
+        }
+
+        $order_id = intval($_POST['order_id'] ?? 0);
+        if (!$order_id) {
+            wp_send_json_error(['message' => 'Invalid order ID']);
+            wp_die();
+        }
+
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            wp_send_json_error(['message' => 'Order not found']);
+            wp_die();
+        }
+
+        // Load refund class
+        if (!class_exists('WC_Jio_Pay_Refund')) {
+            require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
+        }
+
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        $result = $refund_handler->process_full_refund($order_id);
+
+        if ($result['success']) {
+            wp_send_json_success($result);
+        } else {
+            wp_send_json_error($result);
+        }
+        wp_die();
+    }
+
+    /**
+     * AJAX: Get refund status
+     */
+    public function ajax_get_refund_status()
+    {
+        wp_send_json_success(['message' => 'Refund status check']);
+        wp_die();
+    }
+
+    /**
+     * AJAX: Check order/refund status
+     */
+    public function ajax_check_status()
+    {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'jio_pay_status_nonce')) {
+            wp_send_json_error(['message' => 'Security check failed']);
+            wp_die();
+        }
+
+        $order_id = intval($_POST['order_id'] ?? 0);
+        $merchant_txn_no = sanitize_text_field($_POST['merchant_txn_no'] ?? '');
+        $type = sanitize_text_field($_POST['type'] ?? 'order');
+
+        if (!$order_id || !$merchant_txn_no) {
+            wp_send_json_error(['message' => 'Missing parameters']);
+            wp_die();
+        }
+
+        // Load refund class to use its API methods
+        if (!class_exists('WC_Jio_Pay_Refund')) {
+            require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
+        }
+
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        
+        // Use the refund class's check_refund_status which properly parses the response
+        $status_result = $refund_handler->check_refund_status($merchant_txn_no);
+
+        wp_send_json_success($status_result);
+        wp_die();
+    }
+
+    /**
+     * AJAX: Check refund status and update order
+     */
+    public function ajax_check_and_update_refund_status()
+    {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'jio_pay_status_nonce')) {
+            wp_send_json_error(['message' => 'Security check failed']);
+            wp_die();
+        }
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_send_json_error(['message' => 'You do not have permission']);
+            wp_die();
+        }
+
+        $order_id = intval($_POST['order_id'] ?? 0);
+        $refund_merchant_txn_no = sanitize_text_field($_POST['merchant_txn_no'] ?? '');
+
+        if (!$order_id || !$refund_merchant_txn_no) {
+            wp_send_json_error(['message' => 'Missing parameters']);
+            wp_die();
+        }
+
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            wp_send_json_error(['message' => 'Order not found']);
+            wp_die();
+        }
+
+        // Load refund class
+        if (!class_exists('WC_Jio_Pay_Refund')) {
+            require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
+        }
+
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        
+        // Call the public method to check status
+        $status_result = $refund_handler->check_refund_status($refund_merchant_txn_no);
+
+        // If refund successful, update order to refunded
+        if ($status_result['success'] && isset($status_result['raw_response']['txnStatus']) && $status_result['raw_response']['txnStatus'] === 'SUC') {
+            $order->update_status('refunded', __('Refund confirmed successful via JioPay', 'woo-jiopay'));
+            
+            // Store refund response
+            $order->update_meta_data('_jio_pay_refund_response', $status_result);
+            $order->update_meta_data('_jio_pay_refund_date', current_time('mysql'));
+            $order->save();
+
+            // Add REFUNDED entry to refund history
+            $refund_id = isset($status_result['raw_response']['refund_id']) ? $status_result['raw_response']['refund_id'] : (isset($status_result['raw_response']['txnID']) ? $status_result['raw_response']['txnID'] : '');
+            WC_Jio_Pay_Refund::add_refund_history_entry($order_id, 'REFUNDED', $refund_id);
+
+            // Add order note with refund details
+            $order->add_order_note(sprintf(
+                __('Refund status confirmed. Refund Txn ID: %s | Jio Pay Refund ID: %s', 'woo-jiopay'),
+                $refund_merchant_txn_no,
+                $refund_id
+            ));
+
+            wp_send_json_success([
+                'message' => 'Refund confirmed and order updated',
+                'status' => 'refunded',
+                'response' => $status_result
+            ]);
+        } else {
+            wp_send_json_success([
+                'message' => 'Status check completed',
+                'status' => 'pending',
+                'response' => $status_result
+            ]);
+        }
+
         wp_die();
     }
 
