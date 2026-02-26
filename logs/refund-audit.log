@@ -1,0 +1,175 @@
+[2026-02-19 07:59:04] OrderID: 171 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771487944442","original_merchant_txn_no":"6742818042","auth_id":"72077602773","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 07:59:05
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771487944442&originalTxnNo=6742818042&secureHash=465997a2068b0aa75ee0d9350d288afb62077bc14b3af381bb42d116883099fd&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771487944442
+  originalTxnNo = 6742818042
+  secureHash = 465997a2068b0aa75ee0d9350d288afb62077bc14b3af381bb42d116883099fd
+  transactionType = REFUND
+
+[2026-02-19 07:59:06] OrderID: 171 | User: deepoo@techfleek.com (1) | Status: failed | Data: {"refund_merchant_txn_no":"1771487944442","original_merchant_txn_no":"6742818042","refund_amount":"1.00","error":"Refund failed (Unknown Error: R1000)","error_code":"R1000","api_response":{"success":false,"message":"Refund failed (Unknown Error: R1000)","error_code":"R1000","detailed_error":"Unknown Error: R1000","raw_response":{"success":false,"message":"Refund failed","error_code":"R1000","refund_id":"","response_code":"R1000"},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771487944442","originalTxnNo":"6742818042","secureHash":"465997a2068b0aa75ee0d9350d288afb62077bc14b3af381bb42d116883099fd","transactionType":"REFUND"}}}
+[2026-02-19 08:31:41] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771489901664","original_merchant_txn_no":"8290569448","auth_id":"55932460296","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 08:31:41
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771489901664&originalTxnNo=8290569448&secureHash=ca4011217cb923c35b99b4d2e01b8cf95362cc268c8bbe83d076f7209e5dc6fd&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771489901664
+  originalTxnNo = 8290569448
+  secureHash = ca4011217cb923c35b99b4d2e01b8cf95362cc268c8bbe83d076f7209e5dc6fd
+  transactionType = REFUND
+
+[2026-02-19 08:31:42] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: failed | Data: {"refund_merchant_txn_no":"1771489901664","original_merchant_txn_no":"8290569448","refund_amount":"1.00","error":"Transaction Declined (Unknown Error: 039)","error_code":"039","api_response":{"success":false,"message":"Transaction Declined (Unknown Error: 039)","error_code":"039","detailed_error":"Unknown Error: 039","raw_response":{"success":false,"message":"Transaction Declined","error_code":"039","refund_id":"","response_code":"039","merchant_txn_no":"1771489901664","raw_response":{"secureHash":"4c3039b8cc9e4ca7da76376d3159fd2b939c5ffcfec8cc26a513412599932417","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Transaction Declined","merchantTxnNo":"1771489901664","responseCode":"039"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771489901664","originalTxnNo":"8290569448","secureHash":"ca4011217cb923c35b99b4d2e01b8cf95362cc268c8bbe83d076f7209e5dc6fd","transactionType":"REFUND"}}}
+[2026-02-19 08:36:20] OrderID: 173 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771490180766","original_merchant_txn_no":"2945760485","auth_id":"11100215958","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 08:36:20
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771490180766&originalTxnNo=2945760485&secureHash=e083dcdaea1eacc62db5a1cda44cdca9bad43eb6acc198c8080afc04416c6b18&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771490180766
+  originalTxnNo = 2945760485
+  secureHash = e083dcdaea1eacc62db5a1cda44cdca9bad43eb6acc198c8080afc04416c6b18
+  transactionType = REFUND
+
+[2026-02-19 08:36:22] OrderID: 173 | User: deepoo@techfleek.com (1) | Status: accepted | Data: {"refund_merchant_txn_no":"1771490180766","original_merchant_txn_no":"2945760485","refund_amount":"1.00","refund_id":"7700218370906","api_response":{"success":true,"message":"Refund processed successfully","refund_id":"7700218370906","response_code":"R1000","raw_response":{"success":true,"message":"Request processed successfully","error_code":"R1000","refund_id":"7700218370906","response_code":"R1000","merchant_txn_no":"1771490180766","raw_response":{"secureHash":"bce1596d75168cff966c08b3007ba9033ea78ed2e0b601499fb069c275d8bc53","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Request processed successfully","merchantTxnNo":"1771490180766","responseCode":"R1000","txnID":"7700218370906"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771490180766","originalTxnNo":"2945760485","secureHash":"e083dcdaea1eacc62db5a1cda44cdca9bad43eb6acc198c8080afc04416c6b18","transactionType":"REFUND"}}}
+[2026-02-19 08:36:23] OrderID: 173 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771490180766","original_merchant_txn_no":"2945760485","refund_amount":"1.00","status_check_error":"Transaction Declined"}
+[2026-02-19 09:35:48] OrderID: 175 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771493748235","original_merchant_txn_no":"3600018853","auth_id":"69652239431","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 09:35:48
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771493748235&originalTxnNo=3600018853&secureHash=665c302c5316a3ba34f0b3d30eb6796037070140e1def2f43178b5dd391415ed&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771493748235
+  originalTxnNo = 3600018853
+  secureHash = 665c302c5316a3ba34f0b3d30eb6796037070140e1def2f43178b5dd391415ed
+  transactionType = REFUND
+
+[2026-02-19 09:35:49] OrderID: 175 | User: deepoo@techfleek.com (1) | Status: accepted | Data: {"refund_merchant_txn_no":"1771493748235","original_merchant_txn_no":"3600018853","refund_amount":"1.00","refund_id":"7700218370936","api_response":{"success":true,"message":"Refund processed successfully","refund_id":"7700218370936","response_code":"R1000","raw_response":{"success":true,"message":"Request processed successfully","error_code":"R1000","refund_id":"7700218370936","response_code":"R1000","merchant_txn_no":"1771493748235","raw_response":{"secureHash":"5c1bef5a37676182ded16f5bc63fe3190ffbbddc4db733468edf5f2b63cb06d3","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Request processed successfully","merchantTxnNo":"1771493748235","responseCode":"R1000","txnID":"7700218370936"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771493748235","originalTxnNo":"3600018853","secureHash":"665c302c5316a3ba34f0b3d30eb6796037070140e1def2f43178b5dd391415ed","transactionType":"REFUND"}}}
+[2026-02-19 09:35:50] OrderID: 175 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771493748235","original_merchant_txn_no":"3600018853","refund_amount":"1.00","status_check_error":"Transaction Declined"}
+[2026-02-19 11:24:50] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500290452","original_merchant_txn_no":"8290569448","auth_id":"55932460296","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 11:24:50
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771500290452&originalTxnNo=8290569448&secureHash=4dee0d07a0b13436b1817ffa9c0a24eb1c230339abe4e10e5d5904dbe4ad3e16&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771500290452
+  originalTxnNo = 8290569448
+  secureHash = 4dee0d07a0b13436b1817ffa9c0a24eb1c230339abe4e10e5d5904dbe4ad3e16
+  transactionType = REFUND
+
+[2026-02-19 11:24:51] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: failed | Data: {"refund_merchant_txn_no":"1771500290452","original_merchant_txn_no":"8290569448","refund_amount":"1.00","error":"Transaction Declined (Unknown Error: 039)","error_code":"039","api_response":{"success":false,"message":"Transaction Declined (Unknown Error: 039)","error_code":"039","detailed_error":"Unknown Error: 039","raw_response":{"success":false,"message":"Transaction Declined","error_code":"039","refund_id":"","response_code":"039","merchant_txn_no":"1771500290452","raw_response":{"secureHash":"383c293e2f55091be0f484d4120a7ef8fe1c25193bf63e40464fc6f6d82885d2","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Transaction Declined","merchantTxnNo":"1771500290452","responseCode":"039"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771500290452","originalTxnNo":"8290569448","secureHash":"4dee0d07a0b13436b1817ffa9c0a24eb1c230339abe4e10e5d5904dbe4ad3e16","transactionType":"REFUND"}}}
+[2026-02-19 11:24:59] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500299932","original_merchant_txn_no":"8290569448","auth_id":"55932460296","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 11:24:59
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771500299932&originalTxnNo=8290569448&secureHash=c75991b921db4a756ef0236b5bcee31627f0d3812e51a3e05496381cddb9fd14&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771500299932
+  originalTxnNo = 8290569448
+  secureHash = c75991b921db4a756ef0236b5bcee31627f0d3812e51a3e05496381cddb9fd14
+  transactionType = REFUND
+
+[2026-02-19 11:25:00] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: failed | Data: {"refund_merchant_txn_no":"1771500299932","original_merchant_txn_no":"8290569448","refund_amount":"1.00","error":"Transaction Declined (Unknown Error: 039)","error_code":"039","api_response":{"success":false,"message":"Transaction Declined (Unknown Error: 039)","error_code":"039","detailed_error":"Unknown Error: 039","raw_response":{"success":false,"message":"Transaction Declined","error_code":"039","refund_id":"","response_code":"039","merchant_txn_no":"1771500299932","raw_response":{"secureHash":"2f4f21bedac135ee188a622b09954bab3ed1bb57cc3708054d151f419c38d385","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Transaction Declined","merchantTxnNo":"1771500299932","responseCode":"039"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771500299932","originalTxnNo":"8290569448","secureHash":"c75991b921db4a756ef0236b5bcee31627f0d3812e51a3e05496381cddb9fd14","transactionType":"REFUND"}}}
+[2026-02-19 11:25:05] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500305408","original_merchant_txn_no":"8290569448","auth_id":"55932460296","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 11:25:05
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771500305408&originalTxnNo=8290569448&secureHash=954c3042b12172b121cfaea2dffbe3cb94eda46e62f3e41c17bf11dbbf106c32&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771500305408
+  originalTxnNo = 8290569448
+  secureHash = 954c3042b12172b121cfaea2dffbe3cb94eda46e62f3e41c17bf11dbbf106c32
+  transactionType = REFUND
+
+[2026-02-19 11:25:06] OrderID: 172 | User: deepoo@techfleek.com (1) | Status: failed | Data: {"refund_merchant_txn_no":"1771500305408","original_merchant_txn_no":"8290569448","refund_amount":"1.00","error":"Transaction Declined (Unknown Error: 039)","error_code":"039","api_response":{"success":false,"message":"Transaction Declined (Unknown Error: 039)","error_code":"039","detailed_error":"Unknown Error: 039","raw_response":{"success":false,"message":"Transaction Declined","error_code":"039","refund_id":"","response_code":"039","merchant_txn_no":"1771500305408","raw_response":{"secureHash":"9a8f9ed2c724fa04ebf5f73dbe13ba3d2c8906c14a8b254a0d2f74dd6e4630d4","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Transaction Declined","merchantTxnNo":"1771500305408","responseCode":"039"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771500305408","originalTxnNo":"8290569448","secureHash":"954c3042b12172b121cfaea2dffbe3cb94eda46e62f3e41c17bf11dbbf106c32","transactionType":"REFUND"}}}
+[2026-02-19 11:27:38] OrderID: 178 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500458282","original_merchant_txn_no":"3548373195","auth_id":"50602549929","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 11:27:38
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771500458282&originalTxnNo=3548373195&secureHash=3f5992b94274884d06fcedeacbc513a2bd754d8b39c45039479cbe2e55c091b1&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771500458282
+  originalTxnNo = 3548373195
+  secureHash = 3f5992b94274884d06fcedeacbc513a2bd754d8b39c45039479cbe2e55c091b1
+  transactionType = REFUND
+
+[2026-02-19 11:27:39] OrderID: 178 | User: deepoo@techfleek.com (1) | Status: accepted | Data: {"refund_merchant_txn_no":"1771500458282","original_merchant_txn_no":"3548373195","refund_amount":"1.00","refund_id":"7700218424211","api_response":{"success":true,"message":"Refund processed successfully","refund_id":"7700218424211","response_code":"R1000","raw_response":{"success":true,"message":"Request processed successfully","error_code":"R1000","refund_id":"7700218424211","response_code":"R1000","merchant_txn_no":"1771500458282","raw_response":{"secureHash":"b9190950f580cab378100bf4984d2a8c7d231489d9e64a9dda4c6b5928d704c7","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Request processed successfully","merchantTxnNo":"1771500458282","responseCode":"R1000","txnID":"7700218424211"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771500458282","originalTxnNo":"3548373195","secureHash":"3f5992b94274884d06fcedeacbc513a2bd754d8b39c45039479cbe2e55c091b1","transactionType":"REFUND"}}}
+[2026-02-19 11:27:40] OrderID: 178 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500458282","original_merchant_txn_no":"3548373195","refund_amount":"1.00","status_check_error":"Transaction Declined"}
+[2026-02-19 11:32:25] OrderID: 179 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500745713","original_merchant_txn_no":"3134742335","auth_id":"79997485433","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 11:32:25
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771500745713&originalTxnNo=3134742335&secureHash=4af65b03437e9eb4bae18c9808b56e0a89343050a35c3e946d3ad6aaa0277501&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771500745713
+  originalTxnNo = 3134742335
+  secureHash = 4af65b03437e9eb4bae18c9808b56e0a89343050a35c3e946d3ad6aaa0277501
+  transactionType = REFUND
+
+[2026-02-19 11:32:26] OrderID: 179 | User: deepoo@techfleek.com (1) | Status: accepted | Data: {"refund_merchant_txn_no":"1771500745713","original_merchant_txn_no":"3134742335","refund_amount":"1.00","refund_id":"7700218424217","api_response":{"success":true,"message":"Refund processed successfully","refund_id":"7700218424217","response_code":"R1000","raw_response":{"success":true,"message":"Request processed successfully","error_code":"R1000","refund_id":"7700218424217","response_code":"R1000","merchant_txn_no":"1771500745713","raw_response":{"secureHash":"427f6cce0c6cbf8f91a475a9498fbfe3a379d97d8cc7760ffb716f0f1cc7b3df","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Request processed successfully","merchantTxnNo":"1771500745713","responseCode":"R1000","txnID":"7700218424217"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771500745713","originalTxnNo":"3134742335","secureHash":"4af65b03437e9eb4bae18c9808b56e0a89343050a35c3e946d3ad6aaa0277501","transactionType":"REFUND"}}}
+[2026-02-19 11:32:28] OrderID: 179 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500745713","original_merchant_txn_no":"3134742335","refund_amount":"1.00","status_check_error":"Transaction Declined"}
+[2026-02-19 11:35:30] OrderID: 180 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500930303","original_merchant_txn_no":"8466770469","auth_id":"76575601118","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 11:35:30
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771500930303&originalTxnNo=8466770469&secureHash=bef31f75b6f966285bc29623a9875ddd38659c39a2280734f2a8c827252981e4&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771500930303
+  originalTxnNo = 8466770469
+  secureHash = bef31f75b6f966285bc29623a9875ddd38659c39a2280734f2a8c827252981e4
+  transactionType = REFUND
+
+[2026-02-19 11:35:31] OrderID: 180 | User: deepoo@techfleek.com (1) | Status: accepted | Data: {"refund_merchant_txn_no":"1771500930303","original_merchant_txn_no":"8466770469","refund_amount":"1.00","refund_id":"7700218424219","api_response":{"success":true,"message":"Refund processed successfully","refund_id":"7700218424219","response_code":"R1000","raw_response":{"success":true,"message":"Request processed successfully","error_code":"R1000","refund_id":"7700218424219","response_code":"R1000","merchant_txn_no":"1771500930303","raw_response":{"secureHash":"dbfbf02519d289964942362676a8f035ddf2354c302ee7cd0429d01f27ee67df","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Request processed successfully","merchantTxnNo":"1771500930303","responseCode":"R1000","txnID":"7700218424219"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771500930303","originalTxnNo":"8466770469","secureHash":"bef31f75b6f966285bc29623a9875ddd38659c39a2280734f2a8c827252981e4","transactionType":"REFUND"}}}
+[2026-02-19 11:35:33] OrderID: 180 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771500930303","original_merchant_txn_no":"8466770469","refund_amount":"1.00","status_check_error":"Transaction Declined"}
+[2026-02-19 11:40:17] OrderID: 181 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771501217105","original_merchant_txn_no":"7325061718","auth_id":"60470318182","refund_amount":"2.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 11:40:17
+POST Data: amount=2.00&merchantId=JP2000000000031&merchantTxnNo=1771501217105&originalTxnNo=7325061718&secureHash=4826c610dd9a7988fa6a746fb813b7129098f0e207502ebc92e5b960fbc11f0c&transactionType=REFUND
+Formatted Parameters:
+  amount = 2.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771501217105
+  originalTxnNo = 7325061718
+  secureHash = 4826c610dd9a7988fa6a746fb813b7129098f0e207502ebc92e5b960fbc11f0c
+  transactionType = REFUND
+
+[2026-02-19 11:40:19] OrderID: 181 | User: deepoo@techfleek.com (1) | Status: accepted | Data: {"refund_merchant_txn_no":"1771501217105","original_merchant_txn_no":"7325061718","refund_amount":"2.00","refund_id":"7700218424224","api_response":{"success":true,"message":"Refund processed successfully","refund_id":"7700218424224","response_code":"R1000","raw_response":{"success":true,"message":"Request processed successfully","error_code":"R1000","refund_id":"7700218424224","response_code":"R1000","merchant_txn_no":"1771501217105","raw_response":{"secureHash":"730d631095cbcf435e06cebc1ffd7f4f470bbfe1def26d8fe78d884407ab2db7","acqName":"PayPhi","cardNetwork":"VISA","merchantId":"JP2000000000031","respDescription":"Request processed successfully","merchantTxnNo":"1771501217105","responseCode":"R1000","txnID":"7700218424224"}},"payload_sent":{"amount":"2.00","merchantId":"JP2000000000031","merchantTxnNo":"1771501217105","originalTxnNo":"7325061718","secureHash":"4826c610dd9a7988fa6a746fb813b7129098f0e207502ebc92e5b960fbc11f0c","transactionType":"REFUND"}}}
+[2026-02-19 11:40:20] OrderID: 181 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771501217105","original_merchant_txn_no":"7325061718","refund_amount":"2.00","status_check_error":"Transaction Declined"}
+[2026-02-19 12:00:25] OrderID: 184 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771502425621","original_merchant_txn_no":"6545454901","auth_id":"69715919065","refund_amount":"1.00","order_status":"processing"}
+=== Refund API Payload ===
+Endpoint: https://uat.jiopay.co.in/tsp/pg/api/command
+Timestamp: 2026-02-19 12:00:25
+POST Data: amount=1.00&merchantId=JP2000000000031&merchantTxnNo=1771502425621&originalTxnNo=6545454901&secureHash=ab6fc88be769060dc46a6a8a01cbf41aaab38ecb63da0dd5da64125b46f94c60&transactionType=REFUND
+Formatted Parameters:
+  amount = 1.00
+  merchantId = JP2000000000031
+  merchantTxnNo = 1771502425621
+  originalTxnNo = 6545454901
+  secureHash = ab6fc88be769060dc46a6a8a01cbf41aaab38ecb63da0dd5da64125b46f94c60
+  transactionType = REFUND
+
+[2026-02-19 12:00:26] OrderID: 184 | User: deepoo@techfleek.com (1) | Status: accepted | Data: {"refund_merchant_txn_no":"1771502425621","original_merchant_txn_no":"6545454901","refund_amount":"1.00","refund_id":"7700218424240","api_response":{"success":true,"message":"Refund processed successfully","refund_id":"7700218424240","response_code":"R1000","raw_response":{"success":true,"message":"Request processed successfully","error_code":"R1000","refund_id":"7700218424240","response_code":"R1000","merchant_txn_no":"1771502425621","raw_response":{"secureHash":"f0f8b41d9f452bb1cd7f6ec603fc4b851826711dd1a500a66fcde3feeee1ccf3","acqName":"PayPhi","merchantId":"JP2000000000031","respDescription":"Request processed successfully","merchantTxnNo":"1771502425621","responseCode":"R1000","txnID":"7700218424240"}},"payload_sent":{"amount":"1.00","merchantId":"JP2000000000031","merchantTxnNo":"1771502425621","originalTxnNo":"6545454901","secureHash":"ab6fc88be769060dc46a6a8a01cbf41aaab38ecb63da0dd5da64125b46f94c60","transactionType":"REFUND"}}}
+[2026-02-19 12:00:27] OrderID: 184 | User: deepoo@techfleek.com (1) | Status: pending | Data: {"refund_merchant_txn_no":"1771502425621","original_merchant_txn_no":"6545454901","refund_amount":"1.00","status_check_error":"Transaction Declined"}

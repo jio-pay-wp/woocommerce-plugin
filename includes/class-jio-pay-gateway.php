@@ -95,6 +95,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         // Add admin hooks for refund UI (only once)
         if (!self::$hooks_registered) {
             add_action('woocommerce_admin_order_data_after_order_details', [$this, 'add_refund_button']);
+            add_action('admin_notices', [__CLASS__, 'check_live_credentials_notice']);
             self::$hooks_registered = true;
         }
     }
@@ -270,10 +271,47 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         }
 
         if (empty($this->merchant_id) || empty($this->secret_key)) {
+            // Log which credentials are missing to help with debugging
+            if (defined('WP_DEBUG') && WP_DEBUG) {
+                $env = $this->environment === 'prod' ? 'Live' : 'UAT';
+                $missing = [];
+                if (empty($this->merchant_id)) $missing[] = 'Merchant ID';
+                if (empty($this->secret_key)) $missing[] = 'Secret Key';
+                error_log('[JioPay] Gateway not available: Missing ' . $env . ' credentials - ' . implode(', ', $missing));
+            }
             return false;
         }
 
         return parent::is_available();
+    }
+
+    /**
+     * Show admin notice if live mode is enabled but credentials are missing
+     */
+    public static function check_live_credentials_notice()
+    {
+        $settings = get_option('woocommerce_jio_pay_settings', []);
+        $environment = $settings['environment'] ?? 'uat';
+        
+        if ($environment === 'prod') {
+            $live_merchant_id = $settings['live_merchant_id'] ?? '';
+            $live_secret_key = $settings['live_secret_key'] ?? '';
+            
+            if (empty($live_merchant_id) || empty($live_secret_key)) {
+                echo '<div class="notice notice-error"><p>';
+                echo '<strong>Jio Pay Warning:</strong> You have selected Live (Production) mode but ';
+                if (empty($live_merchant_id) && empty($live_secret_key)) {
+                    echo 'Live Merchant ID and Live Secret Key are missing.';
+                } elseif (empty($live_merchant_id)) {
+                    echo 'Live Merchant ID is missing.';
+                } else {
+                    echo 'Live Secret Key is missing.';
+                }
+                echo ' The payment gateway will not be visible on checkout until these are configured.';
+                echo ' <a href="' . admin_url('admin.php?page=wc-settings&tab=checkout&section=jio_pay') . '">Configure now</a>';
+                echo '</p></div>';
+            }
+        }
     }
 
     /**

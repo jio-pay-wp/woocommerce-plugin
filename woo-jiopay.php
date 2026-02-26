@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 1.1.6
+ * Version: 1.1.7
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '1.1.6');
+define('JIO_PAY_VERSION', '1.1.7');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -187,7 +187,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-sdk',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-sdk.js',
             [],
-            '1.1.6',
+            '1.1.7',
             true
         );
 
@@ -202,7 +202,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-integration',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-integration.js',
             $integration_deps,
-            '1.1.6',
+            '1.1.7',
             true
         );
 
@@ -256,6 +256,61 @@ add_action('wp_enqueue_scripts', function () {
             body > .exit-popup-wrapper:empty,
             body > div[style*="position: fixed"][style*="z-index"]:empty {
                 display: none !important;
+            }
+            
+            /* ========================================
+               DEFENSIVE STYLES TO PREVENT SDK FROM
+               AFFECTING CHECKOUT PAGE DESIGN
+               ======================================== */
+            
+            /* Reset any global underlines that SDK might apply */
+            .woocommerce-checkout a,
+            .woocommerce-checkout label,
+            .woocommerce-checkout p,
+            .woocommerce-checkout span,
+            .woocommerce-checkout div,
+            .wc-block-checkout a,
+            .wc-block-checkout label,
+            .wc-block-checkout p,
+            .wc-block-checkout span,
+            .wc-block-checkout div,
+            form.checkout a,
+            form.checkout label,
+            form.checkout p,
+            form.checkout span {
+                text-decoration: inherit;
+            }
+            
+            /* Ensure checkout inputs maintain proper styling */
+            .woocommerce-checkout input[type="text"],
+            .woocommerce-checkout input[type="email"],
+            .woocommerce-checkout input[type="tel"],
+            .woocommerce-checkout input[type="number"],
+            .woocommerce-checkout input[type="password"],
+            .woocommerce-checkout select,
+            .woocommerce-checkout textarea,
+            .wc-block-checkout input[type="text"],
+            .wc-block-checkout input[type="email"],
+            .wc-block-checkout input[type="tel"],
+            .wc-block-checkout input[type="number"],
+            .wc-block-checkout select,
+            .wc-block-checkout textarea,
+            form.checkout input[type="text"],
+            form.checkout input[type="email"],
+            form.checkout input[type="tel"],
+            form.checkout input[type="number"],
+            form.checkout select,
+            form.checkout textarea {
+                text-decoration: none !important;
+                font-style: normal !important;
+            }
+            
+            /* Ensure labels are not underlined */
+            .woocommerce-checkout label,
+            .wc-block-checkout label,
+            form.checkout label,
+            #payment label {
+                text-decoration: none !important;
             }
             
             /* Force light mode for checkout page - prevent SDK dark mode from affecting page */

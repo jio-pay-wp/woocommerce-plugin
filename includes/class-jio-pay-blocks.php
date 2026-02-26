@@ -12,7 +12,26 @@ class WC_Jio_Pay_Blocks_Support extends AbstractPaymentMethodType {
     }
 
     public function is_active() {
-        return ! empty( $this->settings['enabled'] ) && 'yes' === $this->settings['enabled'];
+        if (empty($this->settings['enabled']) || 'yes' !== $this->settings['enabled']) {
+            return false;
+        }
+        
+        // Check for credentials based on environment
+        $environment = $this->settings['environment'] ?? 'uat';
+        if ($environment === 'prod') {
+            $merchant_id = $this->settings['live_merchant_id'] ?? '';
+            $secret_key = $this->settings['live_secret_key'] ?? '';
+        } else {
+            $merchant_id = $this->settings['uat_merchant_id'] ?? '';
+            $secret_key = $this->settings['uat_secret_key'] ?? '';
+        }
+        
+        // Gateway is not active if credentials are missing
+        if (empty($merchant_id) || empty($secret_key)) {
+            return false;
+        }
+        
+        return true;
     }
 
     public function get_payment_method_script_handles() {
