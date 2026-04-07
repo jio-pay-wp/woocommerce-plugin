@@ -17,6 +17,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     public $merchant_id;
     public $secret_key;
     public $agregator_id;
+    public $mcc_code;
     public $environment;
     public $theme;
     public $payment_method;
@@ -58,10 +59,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             $this->merchant_id = $this->get_option('live_merchant_id');
             $this->secret_key = $this->get_option('live_secret_key');
             $this->agregator_id = $this->get_option('live_agregator_id');
+            $this->mcc_code = $this->get_option('live_mcc_code');
         } else {
             $this->merchant_id = $this->get_option('uat_merchant_id');
             $this->secret_key = $this->get_option('uat_secret_key');
             $this->agregator_id = $this->get_option('uat_agregator_id');
+            $this->mcc_code = $this->get_option('uat_mcc_code');
         }
         
         $this->theme = $this->get_option('theme');
@@ -96,6 +99,8 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         if (!self::$hooks_registered) {
             add_action('woocommerce_admin_order_data_after_order_details', [$this, 'add_refund_button']);
             add_action('admin_notices', [__CLASS__, 'check_live_credentials_notice']);
+            add_filter('woocommerce_hidden_order_itemmeta', [$this, 'hide_refund_item_meta']);
+            add_action('admin_footer', [$this, 'hide_refund_ui']);
             self::$hooks_registered = true;
         }
     }
@@ -155,6 +160,15 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'default' => '',
                 'desc_tip' => true
             ],
+            'uat_mcc_code' => [
+                'title' => __('UAT Merchant Category Code (MCC)', 'woocommerce'),
+                'type' => 'text',
+                'description' => __('Any valid 4-digit MCC code - REQUIRED', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true,
+                'placeholder' => '6012',
+                'required' => true
+            ],
             'live_credentials_section' => [
                 'title' => __('Live (Production) Credentials', 'woocommerce'),
                 'type' => 'title',
@@ -181,16 +195,19 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'default' => '',
                 'desc_tip' => true
             ],
+            'live_mcc_code' => [
+                'title' => __('Live Merchant Category Code (MCC)', 'woocommerce'),
+                'type' => 'text',
+                'description' => __('Any valid 4-digit MCC code - REQUIRED', 'woocommerce'),
+                'default' => '',
+                'desc_tip' => true,
+                'placeholder' => '6012',
+                'required' => true
+            ],
             'payment_options_section' => [
                 'title' => __('Payment Options', 'woocommerce'),
                 'type' => 'title',
                 'description' => __('Configure payment methods and display options', 'woocommerce'),
-            ],
-            'theme' => [
-                'title' => __('Theme (JSON)', 'woocommerce'),
-                'type' => 'text',
-                'description' => __('Custom theme as JSON, e.g. {"primaryColor":"#E39B2B","secondaryColor":"#000"}'),
-                'default' => ''
             ],
             'payment_method' => [
                 'title' => __('Default Payment Method', 'woocommerce'),
@@ -227,7 +244,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     }
 
     /**
-     * Display admin options with environment indicator
+     * Display admin options with tabbed interface for UAT and Live credentials
      */
     public function admin_options()
     {
@@ -255,10 +272,243 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         </div>
         <?php endif; ?>
         
-        <table class="form-table">
-            <?php $this->generate_settings_html(); ?>
-        </table>
+        <!-- Tab Navigation -->
+        <div style="margin: 20px 0; border-bottom: 2px solid #ddd; display: flex; gap: 0;">
+            <button type="button" class="jio-pay-tab-button jio-pay-tab-active" data-tab="general" style="background: #f9f9f9; border: 1px solid #ddd; border-bottom: 2px solid #0073aa; padding: 10px 20px; cursor: pointer; font-weight: 600; color: #0073aa;">
+                <span style="font-size: 14px;">⚙️ General Settings</span>
+            </button>
+            <button type="button" class="jio-pay-tab-button" data-tab="uat" style="background: #f9f9f9; border: 1px solid #ddd; border-bottom: none; padding: 10px 20px; cursor: pointer; font-weight: 600; color: #666;">
+                <span style="font-size: 14px;">🧪 UAT Credentials</span>
+            </button>
+            <button type="button" class="jio-pay-tab-button" data-tab="live" style="background: #f9f9f9; border: 1px solid #ddd; border-bottom: none; padding: 10px 20px; cursor: pointer; font-weight: 600; color: #666;">
+                <span style="font-size: 14px;">🔴 Live Credentials</span>
+            </button>
+        </div>
+
+        <!-- Tab Content -->
+        <div style="margin-top: 20px; padding: 0;">
+            <!-- General Settings Tab -->
+            <div class="jio-pay-tab-content jio-pay-tab-active" data-tab="general" style="display: block; border: 1px solid #ddd; padding: 20px 25px; background: white;">
+                <table class="form-table" style="margin: 0; border-collapse: collapse; width: 100%;">
+                    <?php 
+                    $general_fields = ['enabled', 'title', 'description', 'environment', 'payment_method', 'allowed_payment_types', 'timeout'];
+                    foreach ($general_fields as $field_key) {
+                        if (isset($this->form_fields[$field_key])) {
+                            $this->generate_settings_field($field_key);
+                        }
+                    }
+                    ?>
+                </table>
+            </div>
+
+            <!-- UAT Credentials Tab -->
+            <div class="jio-pay-tab-content" data-tab="uat" style="display: none; border: 1px solid #ddd; padding: 20px 25px; background: white;">
+                <table class="form-table" style="margin: 0; border-collapse: collapse; width: 100%;">
+                    <?php 
+                    $uat_fields = ['uat_merchant_id', 'uat_secret_key', 'uat_agregator_id', 'uat_mcc_code'];
+                    foreach ($uat_fields as $field_key) {
+                        if (isset($this->form_fields[$field_key])) {
+                            $this->generate_settings_field($field_key);
+                        }
+                    }
+                    ?>
+                </table>
+            </div>
+
+            <!-- Live Credentials Tab -->
+            <div class="jio-pay-tab-content" data-tab="live" style="display: none; border: 1px solid #ddd; padding: 20px 25px; background: white;">
+                <table class="form-table" style="margin: 0; border-collapse: collapse; width: 100%;">
+                    <?php 
+                    $live_fields = ['live_merchant_id', 'live_secret_key', 'live_agregator_id', 'live_mcc_code'];
+                    foreach ($live_fields as $field_key) {
+                        if (isset($this->form_fields[$field_key])) {
+                            $this->generate_settings_field($field_key);
+                        }
+                    }
+                    ?>
+                </table>
+            </div>
+        </div>
+
+        <style>
+            .jio-pay-tab-button {
+                transition: all 0.3s ease;
+                border-radius: 4px 4px 0 0 !important;
+            }
+            
+            .jio-pay-tab-button:hover {
+                background: #e8f0f8 !important;
+            }
+            
+            .jio-pay-tab-button.jio-pay-tab-active {
+                background: white !important;
+                border-bottom: 3px solid #0073aa !important;
+                color: #0073aa !important;
+            }
+            
+            .jio-pay-tab-content {
+                border-radius: 0 0 4px 4px;
+            }
+            
+            .jio-pay-tab-content .form-table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+            }
+            
+            .jio-pay-tab-content .form-table th,
+            .jio-pay-tab-content .form-table td {
+                padding: 12px 0 !important;
+                vertical-align: top !important;
+                border: none !important;
+            }
+            
+            .jio-pay-tab-content .form-table th {
+                text-align: left !important;
+                padding-right: 20px !important;
+                width: 30% !important;
+                font-weight: 600 !important;
+            }
+            
+            .jio-pay-tab-content .form-table th label {
+                display: flex !important;
+                align-items: center !important;
+                gap: 8px !important;
+                white-space: nowrap !important;
+            }
+            
+            .jio-pay-tab-content .form-table td {
+                width: 70% !important;
+            }
+            
+            .jio-pay-tab-content .form-table tr:not(:last-child) {
+                border-bottom: 1px solid #eee !important;
+            }
+            
+            .description {
+                font-size: 12px !important;
+                color: #666 !important;
+                margin-top: 5px !important;
+                display: block !important;
+            }
+            
+            /* Tooltip styling */
+            .woocommerce-help-tip {
+                display: inline-block !important;
+                width: 18px !important;
+                height: 18px !important;
+                line-height: 18px !important;
+                text-align: center !important;
+                background-color: #0073aa !important;
+                color: white !important;
+                border-radius: 50% !important;
+                font-weight: bold !important;
+                font-size: 12px !important;
+                cursor: help !important;
+                margin: 0 !important;
+                flex-shrink: 0 !important;
+            }
+            
+            .woocommerce-help-tip:hover {
+                background-color: #005a87 !important;
+            }
+        </style>
+
+        <script>
+            (function() {
+                document.querySelectorAll('.jio-pay-tab-button').forEach(function(button) {
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const tabName = this.getAttribute('data-tab');
+                        
+                        // Hide all tab contents
+                        document.querySelectorAll('.jio-pay-tab-content').forEach(function(tab) {
+                            tab.style.display = 'none';
+                            tab.classList.remove('jio-pay-tab-active');
+                        });
+                        
+                        // Remove active class from all buttons
+                        document.querySelectorAll('.jio-pay-tab-button').forEach(function(btn) {
+                            btn.classList.remove('jio-pay-tab-active');
+                            btn.style.borderBottom = 'none';
+                            btn.style.color = '#666';
+                        });
+                        
+                        // Show selected tab
+                        document.querySelector('[data-tab="' + tabName + '"].jio-pay-tab-content').style.display = 'block';
+                        document.querySelector('[data-tab="' + tabName + '"].jio-pay-tab-content').classList.add('jio-pay-tab-active');
+                        
+                        // Mark button as active
+                        this.classList.add('jio-pay-tab-active');
+                        this.style.borderBottom = '3px solid #0073aa';
+                        this.style.color = '#0073aa';
+                    });
+                });
+            })();
+        </script>
         <?php
+    }
+
+    /**
+     * Generate a single field's HTML
+     */
+    private function generate_settings_field($field_key)
+    {
+        $field = $this->form_fields[$field_key];
+        $method_name = 'generate_' . $field['type'] . '_html';
+        
+        if (method_exists($this, $method_name)) {
+            echo $this->$method_name($field_key, $field);
+        } else {
+            // Fallback to standard field generation
+            echo '<tr valign="top" class="' . esc_attr($field_key) . '_field">';
+            echo '<th scope="row" class="titledesc">';
+            echo '<label for="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" style="display: flex; align-items: center; gap: 8px;">';
+            echo '<span>' . esc_html($field['title']) . '</span>';
+            
+            // Show info icon with tooltip if description exists and desc_tip is enabled
+            if (!empty($field['description']) && !empty($field['desc_tip'])) {
+                echo '<span class="woocommerce-help-tip" title="' . esc_attr($field['description']) . '" style="margin: 0; cursor: help;">?</span>';
+            }
+            
+            echo '</label>';
+            echo '</th>';
+            echo '<td class="forminp">';
+            
+            if ($field['type'] === 'text' || $field['type'] === 'password') {
+                echo '<input type="' . esc_attr($field['type']) . '" id="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" name="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" value="' . esc_attr($this->get_option($field_key)) . '" placeholder="' . esc_attr($field['placeholder'] ?? '') . '" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />';
+            } elseif ($field['type'] === 'checkbox') {
+                echo '<input type="checkbox" id="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" name="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" value="yes" ' . checked($this->get_option($field_key), 'yes', false) . ' />';
+            } elseif ($field['type'] === 'select') {
+                echo '<select id="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" name="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">';
+                foreach ($field['options'] as $key => $label) {
+                    echo '<option value="' . esc_attr($key) . '" ' . selected($this->get_option($field_key), $key, false) . '>' . esc_html($label) . '</option>';
+                }
+                echo '</select>';
+            } elseif ($field['type'] === 'multiselect') {
+                echo '<select id="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" name="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '[]" multiple="multiple" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; min-height: 100px;">';
+                $current_values = $this->get_option($field_key);
+                if (!is_array($current_values)) {
+                    $current_values = explode(',', $current_values);
+                }
+                foreach ($field['options'] as $key => $label) {
+                    $selected = in_array($key, $current_values) ? 'selected="selected"' : '';
+                    echo '<option value="' . esc_attr($key) . '" ' . $selected . '>' . esc_html($label) . '</option>';
+                }
+                echo '</select>';
+            } elseif ($field['type'] === 'number') {
+                echo '<input type="number" id="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" name="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" value="' . esc_attr($this->get_option($field_key)) . '" style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />';
+            } elseif ($field['type'] === 'textarea') {
+                echo '<textarea id="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" name="woocommerce_' . esc_attr($this->id) . '_' . esc_attr($field_key) . '" style="width: 100%; max-width: 500px; min-height: 80px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">' . esc_textarea($this->get_option($field_key)) . '</textarea>';
+            }
+            
+            // Show description text below input (not in tooltip)
+            if (!empty($field['description']) && empty($field['desc_tip'])) {
+                echo '<p class="description" style="margin-top: 5px; font-size: 12px; color: #666;">' . wp_kses_post($field['description']) . '</p>';
+            }
+            
+            echo '</td>';
+            echo '</tr>';
+        }
     }
 
     /**
@@ -348,6 +598,48 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         echo '<div id="jio-pay-payment-data" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd; margin: 10px 0;">';
         echo '<p>' . __('You will be redirected to Jio Pay to complete your payment securely.', 'woocommerce') . '</p>';
         echo '</div>';
+    }
+
+    /**
+     * Validate MCC Code field format
+     * Valid MCC codes: ["6012", "6211"]
+     * This field is MANDATORY
+     */
+    public function validate_mcc_code_field($key, $value)
+    {
+        // MCC Code is mandatory
+        if (empty($value)) {
+            WC_Admin_Settings::add_error(
+                __('Merchant Category Code (MCC) is required. Please enter a valid 4-digit MCC code.', 'woo-jiopay')
+            );
+            return '';
+        }
+
+        // MCC Code must be exactly 4 digits
+        if (!preg_match('/^\d{4}$/', $value)) {
+            WC_Admin_Settings::add_error(
+                __('Merchant Category Code (MCC) must be a 4-digit number.', 'woo-jiopay')
+            );
+            return '';
+        }
+
+        return $value;
+    }
+
+    /**
+     * Validate UAT MCC Code
+     */
+    public function validate_uat_mcc_code_field($key, $value)
+    {
+        return $this->validate_mcc_code_field($key, $value);
+    }
+
+    /**
+     * Validate Live MCC Code
+     */
+    public function validate_live_mcc_code_field($key, $value)
+    {
+        return $this->validate_mcc_code_field($key, $value);
     }
 
     public function process_payment($order_id)
@@ -912,6 +1204,89 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             'nonce' => wp_create_nonce('jio_pay_refund_nonce'),
             'order_id' => $order_id
         ]);
+    }
+
+    /**
+     * Hide item-level refund buttons for Jio Pay orders
+     * Refund is managed at the order summary level, not at item level
+     */
+    public function hide_refund_item_meta($hidden_metas)
+    {
+        // Only hide refund meta for Jio Pay orders
+        global $post;
+        
+        if (!$post) {
+            return $hidden_metas;
+        }
+
+        $order = wc_get_order($post->ID);
+        if (!$order || $order->get_payment_method() !== 'jio_pay') {
+            return $hidden_metas;
+        }
+
+        // Hide WooCommerce refund-related order item meta
+        $hidden_metas[] = '_refunded_item_id';
+        $hidden_metas[] = '_refund_id';
+        $hidden_metas[] = '_refund_total';
+        $hidden_metas[] = '_refund_reason';
+
+        return $hidden_metas;
+    }
+
+    public function hide_refund_ui()
+    {
+        // Only on order edit pages
+        if (!is_admin() || !isset($_GET['post']) || !isset($_GET['action']) || $_GET['action'] !== 'edit') {
+            return;
+        }
+
+        $order_id = intval($_GET['post']);
+        $order = wc_get_order($order_id);
+
+        if (!$order || $order->get_payment_method() !== 'jio_pay') {
+            return;
+        }
+
+        // Hide WooCommerce's built-in refund functionality UI
+        ?>
+        <style>
+            /* Completely hide WooCommerce's item-level refund functionality for Jio Pay orders */
+            .woocommerce-order-items .refund-item,
+            .woocommerce-order-items tr.refund-item,
+            .woocommerce-order-items .item-actions .refund,
+            div.refund-item,
+            table.woocommerce-order-items tbody tr.refund,
+            table.woocommerce-order-items .refund-item,
+            .woocommerce-order-items table a.refund-item,
+            .woocommerce-order-items table button.refund-item {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            
+            /* Hide refund buttons in item actions */
+            .woocommerce-order-items .item-actions a.refund,
+            .woocommerce-order-items .item-actions button.refund {
+                display: none !important;
+            }
+        </style>
+        <script>
+            jQuery(document).ready(function($) {
+                // Alternative approach: Find and remove refund buttons by class/text
+                $('.woocommerce-order-items .item-actions').each(function() {
+                    $(this).find('a.refund, button.refund').remove();
+                });
+                
+                // Remove any rows with refund class
+                $('.woocommerce-order-items tbody tr.refund-item, .woocommerce-order-items tbody tr.refund').remove();
+                
+                // Remove items with .refund-item class
+                $('.woocommerce-order-items .refund-item').closest('tr').remove();
+            });
+        </script>
+        <?php
     }
 
     /**

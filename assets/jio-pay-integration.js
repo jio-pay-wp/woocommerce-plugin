@@ -700,6 +700,7 @@ jQuery(document).ready(function ($) {
                     env: jioPayVars.environment,
                     merchantId: jioPayVars.merchant_id,
                     aggId: jioPayVars.agregator_id,
+                    mcc_code: jioPayVars.mcc_code,
                     customerEmailID: customerData.email,
                     email: customerData.email,
                     userName: customerData.name,

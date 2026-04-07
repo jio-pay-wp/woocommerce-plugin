@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 1.1.7
+ * Version: 1.1.8
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '1.1.7');
+define('JIO_PAY_VERSION', '1.1.8');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -187,7 +187,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-sdk',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-sdk.js',
             [],
-            '1.1.7',
+            '1.1.8',
             true
         );
 
@@ -202,7 +202,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-integration',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-integration.js',
             $integration_deps,
-            '1.1.7',
+            '1.1.8',
             true
         );
 
@@ -347,10 +347,12 @@ add_action('wp_enqueue_scripts', function () {
             $merchant_id = $options['live_merchant_id'] ?? '';
             $secret_key = $options['live_secret_key'] ?? '';
             $agregator_id = $options['live_agregator_id'] ?? '';
+            $mcc_code = $options['live_mcc_code'] ?? '';
         } else {
             $merchant_id = $options['uat_merchant_id'] ?? '';
             $secret_key = $options['uat_secret_key'] ?? '';
             $agregator_id = $options['uat_agregator_id'] ?? '';
+            $mcc_code = $options['uat_mcc_code'] ?? '';
         }
 
         // Get cart/order data for payment
@@ -398,6 +400,7 @@ add_action('wp_enqueue_scripts', function () {
             'merchant_id' => $merchant_id,
             'environment' => $environment,
             'agregator_id' => $agregator_id,
+            'mcc_code' => $mcc_code,
             'theme' => $options['theme'] ?? 'light',
             'payment_method' => $options['payment_method'] ?? 'all',
             'allowed_payment_types' => $options['allowed_payment_types'] ?? 'all',
