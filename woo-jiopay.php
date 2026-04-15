@@ -187,7 +187,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-sdk',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-sdk.js',
             [],
-            '1.1.8',
+            '1.1.9',
             true
         );
 
@@ -202,7 +202,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-integration',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-integration.js',
             $integration_deps,
-            '1.1.8',
+            '1.1.9',
             true
         );
 
