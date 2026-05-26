@@ -706,7 +706,7 @@ jQuery(document).ready(function ($) {
                     userName: customerData.name,
                     merchantName: jioPayVars.merchant_name,
                     merchantLogo: jioPayVars.merchantLogo || '',
-                    allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB", "UPI_QR", "UPI_VPA", "CARD"]),
+                    allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB", "UPI_QR", "UPI_VPA", "CREDIT_CARD", "DEBIT_CARD"]),
                     theme: jioPayVars.theme || { color: "#E39B2B" },
                     timeout: jioPayVars.timeout,
                     secretKey: jioPayVars.secret_key,

@@ -226,13 +226,14 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'type' => 'multiselect',
                 'description' => __('Select allowed payment types.'),
                 'options' => [
-                    'CARD' => __('Card', 'woocommerce'),
                     'NB' => __('Net Banking', 'woocommerce'),
                     'UPI_QR' => __('UPI QR', 'woocommerce'),
                     'UPI_INTENT' => __('UPI Intent', 'woocommerce'),
                     'UPI_VPA' => __('UPI VPA', 'woocommerce'),
+                    'CREDIT_CARD' => __('Credit Card', 'woocommerce'),
+                    'DEBIT_CARD' => __('Debit Card', 'woocommerce'),
                 ],
-                'default' => ['CARD', 'NB', 'UPI_QR', 'UPI_INTENT', 'UPI_VPA']
+                'default' => ['NB', 'UPI_QR', 'UPI_VPA', 'CREDIT_CARD', 'DEBIT_CARD']
             ],
             'timeout' => [
                 'title' => __('Timeout (ms)', 'woocommerce'),
