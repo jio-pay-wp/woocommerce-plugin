@@ -274,6 +274,11 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      */
     public function admin_options()
     {
+        // Load the WordPress media library so the Merchant Logo picker works.
+        // Called here (not only via admin_enqueue_scripts) so it runs regardless
+        // of when the gateway is instantiated on the settings screen.
+        wp_enqueue_media();
+
         $current_env = $this->get_option('environment', 'uat');
         $env_label = $current_env === 'prod' ? 'Live (Production)' : 'UAT (Testing)';
         $env_color = $current_env === 'prod' ? '#dc3232' : '#46b450';
@@ -470,9 +475,23 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                     });
                 });
 
-                // Merchant logo media picker
-                var wrapper = document.querySelector('.jio-pay-image-field');
-                if (wrapper && window.wp && wp.media) {
+            })();
+
+            // Merchant logo media picker.
+            // wp.media loads via footer scripts, so this may run before it exists —
+            // retry until it's available, then wire up the buttons once.
+            (function() {
+                var attempts = 0;
+                function initLogoPicker() {
+                    var wrapper = document.querySelector('.jio-pay-image-field');
+                    if (!wrapper) { return; }
+                    if (!(window.wp && wp.media)) {
+                        if (attempts++ < 40) { setTimeout(initLogoPicker, 150); }
+                        return;
+                    }
+                    if (wrapper.getAttribute('data-jio-picker-ready')) { return; }
+                    wrapper.setAttribute('data-jio-picker-ready', '1');
+
                     var input   = wrapper.querySelector('input[type="text"]');
                     var preview = wrapper.querySelector('.jio-pay-image-preview img');
                     var upload  = wrapper.querySelector('.jio-pay-upload-logo');
@@ -517,6 +536,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                     input.addEventListener('change', function() {
                         setLogo(input.value.trim());
                     });
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initLogoPicker);
+                } else {
+                    initLogoPicker();
                 }
             })();
         </script>
