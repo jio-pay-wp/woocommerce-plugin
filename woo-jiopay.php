@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 1.2.4
+ * Version: 1.2.5
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -17,7 +17,7 @@
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Update URI: https://github.com/jio-pay-wp/woocommerce-plugin
  * Network: false
- */
+*/
 
 
 if (!defined('ABSPATH'))
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '1.2.4');
+define('JIO_PAY_VERSION', '1.2.5');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -187,7 +187,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-sdk',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-sdk.js',
             [],
-            '1.2.4',
+            '1.2.5',
             true
         );
 
@@ -202,7 +202,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-integration',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-integration.js',
             $integration_deps,
-            '1.2.4',
+            '1.2.5',
             true
         );
 
@@ -411,7 +411,12 @@ add_action('wp_enqueue_scripts', function () {
             'customer_name' => $customer_name,
             'use_test_data' => $use_test_data,
             'merchant_name' => get_bloginfo('name'),
-            'merchantLogo' => (function() {
+            'merchantLogo' => (function() use ($options) {
+                // 1. Plugin's own Merchant Logo setting (theme-independent).
+                if (!empty($options['merchant_logo'])) {
+                    return $options['merchant_logo'];
+                }
+                // 2. Theme's Site Identity logo (custom_logo).
                 $custom_logo_id = get_theme_mod('custom_logo');
                 if ($custom_logo_id) {
                     $logo = wp_get_attachment_image_src($custom_logo_id, 'full');
@@ -419,7 +424,9 @@ add_action('wp_enqueue_scripts', function () {
                         return $logo[0];
                     }
                 }
-                return '';
+                // 3. Site icon / favicon as a last resort.
+                $icon = get_site_icon_url();
+                return $icon ? $icon : '';
             })(),
             'return_url' => add_query_arg('action', 'jio_pay_return_handler', admin_url('admin-ajax.php'))
         ]);

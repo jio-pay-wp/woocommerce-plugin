@@ -101,8 +101,27 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             add_action('admin_notices', [__CLASS__, 'check_live_credentials_notice']);
             add_filter('woocommerce_hidden_order_itemmeta', [$this, 'hide_refund_item_meta']);
             add_action('admin_footer', [$this, 'hide_refund_ui']);
+            add_action('admin_enqueue_scripts', [$this, 'enqueue_settings_assets']);
             self::$hooks_registered = true;
         }
+    }
+
+    /**
+     * Load the WordPress media library on this gateway's settings screen so the
+     * merchant logo picker works.
+     */
+    public function enqueue_settings_assets($hook)
+    {
+        if ($hook !== 'woocommerce_page_wc-settings') {
+            return;
+        }
+        // Only on Payments tab, our gateway section.
+        $tab     = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : '';
+        $section = isset($_GET['section']) ? sanitize_text_field(wp_unslash($_GET['section'])) : '';
+        if ($tab !== 'checkout' || $section !== $this->id) {
+            return;
+        }
+        wp_enqueue_media();
     }
 
     public function init_form_fields()
@@ -209,6 +228,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'type' => 'title',
                 'description' => __('Configure payment methods and display options', 'woocommerce'),
             ],
+            'merchant_logo' => [
+                'title' => __('Merchant Logo', 'woocommerce'),
+                'type' => 'image',
+                'description' => __('Logo shown on the Jio Pay checkout popup. Recommended: a square PNG. If left empty, the theme\'s Site Identity logo or the site icon (favicon) is used as a fallback.', 'woocommerce'),
+                'default' => '',
+            ],
             'payment_method' => [
                 'title' => __('Default Payment Method', 'woocommerce'),
                 'type' => 'select',
@@ -292,7 +317,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             <div class="jio-pay-tab-content jio-pay-tab-active" data-tab="general" style="display: block; border: 1px solid #ddd; padding: 20px 25px; background: white;">
                 <table class="form-table" style="margin: 0; border-collapse: collapse; width: 100%;">
                     <?php 
-                    $general_fields = ['enabled', 'title', 'description', 'environment', 'payment_method', 'allowed_payment_types', 'timeout'];
+                    $general_fields = ['enabled', 'title', 'description', 'environment', 'merchant_logo', 'payment_method', 'allowed_payment_types', 'timeout'];
                     foreach ($general_fields as $field_key) {
                         if (isset($this->form_fields[$field_key])) {
                             $this->generate_settings_field($field_key);
@@ -444,6 +469,55 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                         this.style.color = '#0073aa';
                     });
                 });
+
+                // Merchant logo media picker
+                var wrapper = document.querySelector('.jio-pay-image-field');
+                if (wrapper && window.wp && wp.media) {
+                    var input   = wrapper.querySelector('input[type="text"]');
+                    var preview = wrapper.querySelector('.jio-pay-image-preview img');
+                    var upload  = wrapper.querySelector('.jio-pay-upload-logo');
+                    var remove  = wrapper.querySelector('.jio-pay-remove-logo');
+                    var frame;
+
+                    function setLogo(url) {
+                        input.value = url;
+                        if (url) {
+                            preview.src = url;
+                            preview.style.display = '';
+                            remove.style.display = '';
+                        } else {
+                            preview.src = '';
+                            preview.style.display = 'none';
+                            remove.style.display = 'none';
+                        }
+                    }
+
+                    upload.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        if (frame) { frame.open(); return; }
+                        frame = wp.media({
+                            title: 'Select Merchant Logo',
+                            button: { text: 'Use this logo' },
+                            library: { type: 'image' },
+                            multiple: false
+                        });
+                        frame.on('select', function() {
+                            var attachment = frame.state().get('selection').first().toJSON();
+                            setLogo(attachment.url);
+                        });
+                        frame.open();
+                    });
+
+                    remove.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        setLogo('');
+                    });
+
+                    // Keep preview in sync if the URL is typed/pasted manually
+                    input.addEventListener('change', function() {
+                        setLogo(input.value.trim());
+                    });
+                }
             })();
         </script>
         <?php
@@ -510,6 +584,58 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             echo '</td>';
             echo '</tr>';
         }
+    }
+
+    /**
+     * Render the merchant logo image field with a WP media picker.
+     */
+    public function generate_image_html($field_key, $field)
+    {
+        $field_id  = 'woocommerce_' . $this->id . '_' . $field_key;
+        $value     = $this->get_option($field_key);
+        $has_value = !empty($value);
+
+        ob_start();
+        ?>
+        <tr valign="top" class="<?php echo esc_attr($field_key); ?>_field">
+            <th scope="row" class="titledesc">
+                <label for="<?php echo esc_attr($field_id); ?>" style="display: flex; align-items: center; gap: 8px;">
+                    <span><?php echo esc_html($field['title']); ?></span>
+                </label>
+            </th>
+            <td class="forminp">
+                <div class="jio-pay-image-field" style="display: flex; align-items: flex-start; gap: 15px; flex-wrap: wrap;">
+                    <div class="jio-pay-image-preview" style="width: 80px; height: 80px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                        <img src="<?php echo esc_url($value); ?>" alt="" style="max-width: 100%; max-height: 100%; <?php echo $has_value ? '' : 'display: none;'; ?>" />
+                    </div>
+                    <div style="flex: 1; min-width: 260px;">
+                        <input type="text"
+                               id="<?php echo esc_attr($field_id); ?>"
+                               name="<?php echo esc_attr($field_id); ?>"
+                               value="<?php echo esc_attr($value); ?>"
+                               placeholder="<?php esc_attr_e('No logo selected', 'woocommerce'); ?>"
+                               style="width: 100%; max-width: 500px; padding: 8px; border: 1px solid #ddd; border-radius: 4px;" />
+                        <p style="margin: 8px 0 0;">
+                            <button type="button" class="button jio-pay-upload-logo"><?php esc_html_e('Select / Upload Logo', 'woocommerce'); ?></button>
+                            <button type="button" class="button jio-pay-remove-logo" style="<?php echo $has_value ? '' : 'display: none;'; ?>"><?php esc_html_e('Remove', 'woocommerce'); ?></button>
+                        </p>
+                        <?php if (!empty($field['description'])): ?>
+                            <p class="description" style="margin-top: 5px; font-size: 12px; color: #666;"><?php echo wp_kses_post($field['description']); ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </td>
+        </tr>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Sanitize the merchant logo field value on save.
+     */
+    public function validate_image_field($key, $value)
+    {
+        return esc_url_raw(trim((string) $value));
     }
 
     /**
