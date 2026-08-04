@@ -50,7 +50,9 @@ class WC_Jio_Pay_Blocks_Support extends AbstractPaymentMethodType {
             'jio-pay-blocks',
             plugin_dir_url( __DIR__ ) . 'assets/jio-pay-blocks.js',
             $asset_file['dependencies'],
-            $asset_file['version'],
+            // Use the plugin version for cache-busting so updates reach browsers
+            // (the asset file's version is a static placeholder).
+            defined( 'JIO_PAY_VERSION' ) ? JIO_PAY_VERSION : $asset_file['version'],
             true
         );
 

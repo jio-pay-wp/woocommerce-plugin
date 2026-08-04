@@ -721,8 +721,11 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      */
     public function payment_fields()
     {
-        if ($this->description) {
-            echo wpautop(wp_kses_post($this->description));
+        // Only render a description when the merchant actually set one
+        // (trim guards against a blank-but-truthy value).
+        $description = trim((string) $this->description);
+        if ($description !== '') {
+            echo wpautop(wp_kses_post($description));
         }
 
         // Check if we're in test mode (when cart/user data is not available)
@@ -747,9 +750,11 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             echo '</div>';
         }
 
-        echo '<div id="jio-pay-payment-data" style="padding: 10px; background: #f9f9f9; border: 1px solid #ddd; margin: 10px 0;">';
-        echo '<p>' . __('You will be redirected to Jio Pay to complete your payment securely.', 'woocommerce') . '</p>';
-        echo '</div>';
+        // Plain text note (no bordered box) so it blends into any theme's
+        // checkout and never looks like an empty/broken box.
+        echo '<p class="jio-pay-redirect-note" style="margin: 8px 0 0; font-size: 13px; color: #666; line-height: 1.5;">';
+        echo esc_html__('You will be redirected to Jio Pay to complete your payment securely.', 'woocommerce');
+        echo '</p>';
     }
 
     /**

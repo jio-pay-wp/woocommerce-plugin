@@ -21,15 +21,15 @@
     const jioPayLabel = jioPaySettings.title || __( 'Jio Pay', 'woo-jiopay' );
 
     const JioPayContent = () => {
-        return createElement( 'div', {
-            style: { 
-                padding: '10px', 
-                background: '#f9f9f9', 
-                border: '1px solid #ddd', 
-                margin: '10px 0',
-                borderRadius: '4px'
-            }
-        }, jioPaySettings.description || __( 'You will be redirected to Jio Pay to complete your payment securely.', 'woo-jiopay' ) );
+        // Plain text note (no bordered box) so it blends into any theme's
+        // checkout and never renders as an empty/broken-looking box.
+        // trim() guards against a blank-but-truthy description (e.g. a single
+        // space) which would otherwise show an empty box.
+        const description = ( jioPaySettings.description || '' ).trim() ||
+            __( 'You will be redirected to Jio Pay to complete your payment securely.', 'woo-jiopay' );
+        return createElement( 'p', {
+            style: { margin: '8px 0 0', fontSize: '13px', color: '#666', lineHeight: '1.5' }
+        }, description );
     };
 
     const JioPayLabel = () => {
