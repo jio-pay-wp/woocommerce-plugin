@@ -1,5 +1,59 @@
 jQuery(document).ready(function ($) {
 
+    // ============================================================
+    // Bootstrap leak guard.
+    // The Jio Pay SDK bundle injects the FULL Bootstrap stylesheet
+    // into <head> when it loads. Bootstrap's global reboot (body, *,
+    // headings, .row/.col, etc.) then overrides the store theme's
+    // checkout layout and shatters the page. We disable that injected
+    // stylesheet on the host page by default, and re-enable it only
+    // while the Jio Pay payment popup is open (the popup is a full
+    // screen overlay and relies on Bootstrap for its own styling).
+    // ============================================================
+    var JioPayBootstrapGuard = (function () {
+        // Require two markers unique to a COMPLETE Bootstrap build (the SDK's
+        // injected blob) so we never disable a theme's own partial styles.
+        function isSdkBootstrap(node) {
+            if (!node || node.tagName !== 'STYLE' || !node.textContent) { return false; }
+            var css = node.textContent;
+            return css.indexOf('--bs-body-font-size') !== -1 &&
+                css.indexOf('.d-print-none') !== -1;
+        }
+        function tagNode(node) {
+            if (isSdkBootstrap(node) && node.getAttribute('data-jiopay-bs') === null) {
+                node.setAttribute('data-jiopay-bs', '1');
+                node.media = 'not all'; // disabled on the host page by default
+            }
+        }
+        function sweep() {
+            var styles = document.getElementsByTagName('style');
+            for (var i = 0; i < styles.length; i++) { tagNode(styles[i]); }
+        }
+        function setEnabled(enabled) {
+            sweep(); // catch anything injected synchronously since last call
+            var nodes = document.querySelectorAll('style[data-jiopay-bs]');
+            for (var i = 0; i < nodes.length; i++) {
+                nodes[i].media = enabled ? 'all' : 'not all';
+            }
+        }
+        // Neutralize anything already injected, then watch for later injections.
+        sweep();
+        try {
+            var observer = new MutationObserver(function (mutations) {
+                for (var m = 0; m < mutations.length; m++) {
+                    var added = mutations[m].addedNodes;
+                    for (var n = 0; n < added.length; n++) { tagNode(added[n]); }
+                }
+            });
+            observer.observe(document.head || document.documentElement, { childList: true, subtree: true });
+        } catch (e) { /* MutationObserver unsupported - sweep() still ran */ }
+        return {
+            enable: function () { setEnabled(true); },
+            disable: function () { setEnabled(false); }
+        };
+    })();
+    window.JioPayBootstrapGuard = JioPayBootstrapGuard;
+
     // IMPORTANT: Hide any SDK elements that may be created on page load
     // This prevents dark mode overlays from showing before payment is initiated
     function hideSDKElements() {
@@ -740,6 +794,8 @@ jQuery(document).ready(function ($) {
                 }
 
                 const jioPay = new jioPaySDK(paymentOptions);
+                // Enable the SDK's Bootstrap styles only while the popup is open.
+                JioPayBootstrapGuard.enable();
                 jioPay.open();
 
             } else {
@@ -752,6 +808,7 @@ jQuery(document).ready(function ($) {
 
         } catch (error) {
             console.error('Error initializing Jio Pay:', error);
+            JioPayBootstrapGuard.disable();
             refreshCheckoutForRetry();
             showErrorNotification(
                 'Payment Initialization Failed',
@@ -1019,7 +1076,10 @@ jQuery(document).ready(function ($) {
 
     function handlePaymentSuccess(paymentResult) {
         console.log('Payment success callback triggered');
-        
+
+        // Popup is closing - restore the host page (disable SDK Bootstrap).
+        JioPayBootstrapGuard.disable();
+
         // Immediately mark payment as handled to prevent onClose from firing
         window.jioPaymentHandled = true;
         
@@ -1098,7 +1158,10 @@ jQuery(document).ready(function ($) {
 
     function handlePaymentFailure(error) {
         console.log('Payment failure callback triggered');
-        
+
+        // Popup is closing - restore the host page (disable SDK Bootstrap).
+        JioPayBootstrapGuard.disable();
+
         // Immediately mark payment as handled to prevent onClose from firing
         window.jioPaymentHandled = true;
         
@@ -1119,7 +1182,10 @@ jQuery(document).ready(function ($) {
 
     function handlePaymentCancel() {
         console.log('Payment cancel/close callback triggered, flag status:', window.jioPaymentHandled);
-        
+
+        // Popup is closing - restore the host page (disable SDK Bootstrap).
+        JioPayBootstrapGuard.disable();
+
         // Add a small delay to allow success/failure callbacks to set the flag first
         setTimeout(function() {
             // Only handle if payment wasn't already processed (success/failure)
