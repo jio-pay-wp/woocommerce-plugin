@@ -762,7 +762,7 @@ jQuery(document).ready(function ($) {
                     merchantLogo: jioPayVars.merchantLogo || '',
                     allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB", "UPI_QR", "UPI_VPA", "CREDIT_CARD", "DEBIT_CARD"]),
                     theme: jioPayVars.theme || { color: "#E39B2B" },
-                    timeout: jioPayVars.timeout,
+                    timeOut: jioPayVars.timeout || 300,
                     secretKey: jioPayVars.secret_key,
                     merchantTrId: merchantTrId,
                     returnURL: '', //jioPayVars.return_url, // Return URL for POST callback

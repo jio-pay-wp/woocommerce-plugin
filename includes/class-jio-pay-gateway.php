@@ -261,10 +261,10 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'default' => ['NB', 'UPI_QR', 'UPI_VPA', 'CREDIT_CARD', 'DEBIT_CARD']
             ],
             'timeout' => [
-                'title' => __('Timeout (ms)', 'woocommerce'),
+                'title' => __('Timeout (seconds)', 'woocommerce'),
                 'type' => 'number',
-                'description' => __('Popup timeout in milliseconds, e.g. 1000'),
-                'default' => '1000'
+                'description' => __('Payment popup timeout in seconds. Defaults to 300 (5 minutes) when left blank.', 'woocommerce'),
+                'default' => '300'
             ]
         ];
     }
