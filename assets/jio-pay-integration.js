@@ -54,6 +54,35 @@ jQuery(document).ready(function ($) {
     })();
     window.JioPayBootstrapGuard = JioPayBootstrapGuard;
 
+    // Tear the SDK popup down, then restore the host page.
+    //
+    // Order matters. The SDK's overlay markup depends entirely on the
+    // Bootstrap stylesheet the guard controls, so disabling Bootstrap while
+    // that markup is still mounted drops the overlay into normal page flow
+    // and it renders unstyled on top of the checkout. Unmount first, then
+    // disable. close() also clears the SDK's auto-close timer, which would
+    // otherwise still fire "Session expired!" after a completed payment.
+    function closeJioPayPopup() {
+        try {
+            if (window.jioPayInstance && typeof window.jioPayInstance.close === 'function') {
+                window.jioPayInstance.close();
+            }
+        } catch (e) {
+            console.warn('Jio Pay: SDK close() failed, removing overlay directly.', e);
+        }
+        window.jioPayInstance = null;
+
+        // Belt and braces: drop the overlay if close() left it behind.
+        var overlay = document.getElementById('razorpay-overlay');
+        if (overlay && overlay.parentNode) {
+            overlay.parentNode.removeChild(overlay);
+        }
+
+        JioPayBootstrapGuard.disable();
+    }
+
+    window.closeJioPayPopup = closeJioPayPopup;
+
     // IMPORTANT: Hide any SDK elements that may be created on page load
     // This prevents dark mode overlays from showing before payment is initiated
     function hideSDKElements() {
@@ -794,6 +823,8 @@ jQuery(document).ready(function ($) {
                 }
 
                 const jioPay = new jioPaySDK(paymentOptions);
+                // Keep a reference so the callbacks can tear the popup down.
+                window.jioPayInstance = jioPay;
                 // Enable the SDK's Bootstrap styles only while the popup is open.
                 JioPayBootstrapGuard.enable();
                 jioPay.open();
@@ -808,7 +839,7 @@ jQuery(document).ready(function ($) {
 
         } catch (error) {
             console.error('Error initializing Jio Pay:', error);
-            JioPayBootstrapGuard.disable();
+            closeJioPayPopup();
             refreshCheckoutForRetry();
             showErrorNotification(
                 'Payment Initialization Failed',
@@ -1077,8 +1108,8 @@ jQuery(document).ready(function ($) {
     function handlePaymentSuccess(paymentResult) {
         console.log('Payment success callback triggered');
 
-        // Popup is closing - restore the host page (disable SDK Bootstrap).
-        JioPayBootstrapGuard.disable();
+        // Popup is closing - unmount it, then restore the host page.
+        closeJioPayPopup();
 
         // Immediately mark payment as handled to prevent onClose from firing
         window.jioPaymentHandled = true;
@@ -1159,8 +1190,8 @@ jQuery(document).ready(function ($) {
     function handlePaymentFailure(error) {
         console.log('Payment failure callback triggered');
 
-        // Popup is closing - restore the host page (disable SDK Bootstrap).
-        JioPayBootstrapGuard.disable();
+        // Popup is closing - unmount it, then restore the host page.
+        closeJioPayPopup();
 
         // Immediately mark payment as handled to prevent onClose from firing
         window.jioPaymentHandled = true;
@@ -1183,8 +1214,8 @@ jQuery(document).ready(function ($) {
     function handlePaymentCancel() {
         console.log('Payment cancel/close callback triggered, flag status:', window.jioPaymentHandled);
 
-        // Popup is closing - restore the host page (disable SDK Bootstrap).
-        JioPayBootstrapGuard.disable();
+        // Popup is closing - unmount it, then restore the host page.
+        closeJioPayPopup();
 
         // Add a small delay to allow success/failure callbacks to set the flag first
         setTimeout(function() {
