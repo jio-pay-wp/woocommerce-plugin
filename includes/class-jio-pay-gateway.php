@@ -78,6 +78,11 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         // AJAX endpoints
         add_action('wp_ajax_jio_pay_create_session', [$this, 'create_session']);
         add_action('wp_ajax_nopriv_jio_pay_create_session', [$this, 'create_session']);
+        // Buffer from the very start of the action, not from inside the
+        // handler: a hook registered at a lower priority than ours would
+        // otherwise echo ahead of the buffer and still corrupt the JSON.
+        add_action('wp_ajax_jio_pay_verify_payment', [$this, 'start_output_capture'], 0);
+        add_action('wp_ajax_nopriv_jio_pay_verify_payment', [$this, 'start_output_capture'], 0);
         add_action('wp_ajax_jio_pay_verify_payment', [$this, 'verify_payment']);
         add_action('wp_ajax_nopriv_jio_pay_verify_payment', [$this, 'verify_payment']);
         add_action('wp_ajax_jio_pay_return_handler', [$this, 'handle_return_url']);
@@ -840,9 +845,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
     public function verify_payment()
     {
-        // Enable error reporting for debugging
-        error_reporting(E_ALL);
-        ini_set('display_errors', 1);
+        // This response is JSON and nothing else. A PHP notice printed ahead
+        // of the body makes it unparseable, and the checkout then reports a
+        // "connection" failure for a request that actually succeeded -- after
+        // the customer has already been charged. handle_return_url() below has
+        // always done this correctly; this endpoint did not.
+        ini_set('display_errors', 0);
 
         // Always send JSON response
         header('Content-Type: application/json');
@@ -853,7 +861,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             // Basic validation
             if (!isset($_POST['action']) || $_POST['action'] !== 'jio_pay_verify_payment') {
                 error_log('Invalid action: ' . ($_POST['action'] ?? 'none'));
-                wp_send_json_error(['message' => 'Invalid action']);
+                $this->send_json_error(['message' => 'Invalid action']);
                 wp_die();
             }
 
@@ -862,7 +870,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             if (!$nonce_valid) {
                 error_log('Nonce verification failed. Nonce: ' . ($_POST['nonce'] ?? 'missing'));
                 // Temporarily continue for debugging - in production this should fail
-                // wp_send_json_error(['message' => 'Security check failed']);
+                // $this->send_json_error(['message' => 'Security check failed']);
                 // wp_die();
             }
 
@@ -877,7 +885,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 $order = wc_get_order($order_id);
                 if (!$order) {
                     error_log('Order not found for ID: ' . $order_id);
-                    wp_send_json_error(['message' => 'Order not found for ID: ' . $order_id]);
+                    $this->send_json_error(['message' => 'Order not found for ID: ' . $order_id]);
                     wp_die();
                 }
             } else {
@@ -896,7 +904,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
                 if (empty($orders)) {
                     error_log('No pending orders found for user: ' . $current_user->ID);
-                    wp_send_json_error(['message' => 'No pending order found']);
+                    $this->send_json_error(['message' => 'No pending order found']);
                     wp_die();
                 }
 
@@ -921,7 +929,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             // Validate response code
             if ($txn_response_code !== '0000') {
                 error_log('Payment failed with response code: ' . $txn_response_code);
-                wp_send_json_error(['message' => 'Payment failed: ' . $txn_description]);
+                $this->send_json_error(['message' => 'Payment failed: ' . $txn_description]);
                 wp_die();
             }
 
@@ -967,7 +975,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                     $diff_rupees
                 ));
 
-                wp_send_json_error([
+                $this->send_json_error([
                     'message' => sprintf(
                         'Amount mismatch: Order=%.2f, Payment=%.2f (paisa=%.2f)',
                         $order_amount,
@@ -1006,17 +1014,17 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
             error_log('Payment completed successfully');
 
-            wp_send_json_success([
+            $this->send_json_success([
                 'message' => 'Payment verified successfully',
                 'redirect' => $order->get_checkout_order_received_url(),
                 'order_id' => $order_id
             ]);
 
-        } catch (Exception $e) {
+        } catch (\Throwable $e) {
             error_log('Exception in verify_payment: ' . $e->getMessage());
             error_log('Exception trace: ' . $e->getTraceAsString());
 
-            wp_send_json_error([
+            $this->send_json_error([
                 'message' => 'Payment verification error: ' . $e->getMessage(),
                 'debug' => $e->getTraceAsString()
             ]);
@@ -1024,6 +1032,38 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
 
         wp_die();
+    }
+
+    /**
+     * Send a JSON payload, discarding anything that leaked into the output
+     * buffer first.
+     *
+     * A PHP notice, or a stray echo from a third-party hook fired by
+     * payment_complete(), would otherwise sit in front of the JSON and leave
+     * the browser unable to parse a response that was otherwise fine.
+     */
+    private function send_json_success($data = null)
+    {
+        $this->discard_buffered_output();
+        wp_send_json_success($data);
+    }
+
+    private function send_json_error($data = null)
+    {
+        $this->discard_buffered_output();
+        wp_send_json_error($data);
+    }
+
+    public function start_output_capture()
+    {
+        ob_start();
+    }
+
+    private function discard_buffered_output()
+    {
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
     }
 
     /**

@@ -1180,9 +1180,24 @@ jQuery(document).ready(function ($) {
         }).fail(function (xhr, status, error) {
             console.error('AJAX request failed:', xhr, status, error);
             refreshCheckoutForRetry();
+
+            // "parsererror" means the request reached the server and came back
+            // 200 -- the body just was not valid JSON. Telling the customer to
+            // check their connection sends them after the wrong problem, and
+            // hides a server fault from whoever reads the report.
+            if (status === 'parsererror') {
+                showErrorNotification(
+                    'Payment Status Unconfirmed',
+                    'Your payment may have gone through, but the store could not read the confirmation.' +
+                    '<br><br><strong>Do not pay again.</strong> Please contact support with your order details so we can confirm it for you.'
+                );
+                return;
+            }
+
             showErrorNotification(
                 'Connection Error',
-                'Unable to verify payment due to connection issues.<br><strong>Status:</strong> ' + status + '<br><br>Please check your connection and try again.'
+                'Unable to reach the store to confirm your payment.<br><strong>Status:</strong> ' + status +
+                '<br><br>If money has left your account, do not pay again -- contact support and we will confirm the order.'
             );
         });
     }

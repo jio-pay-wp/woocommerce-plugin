@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 1.3.3
+ * Version: 1.3.4
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '1.3.3');
+define('JIO_PAY_VERSION', '1.3.4');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -138,8 +138,6 @@ add_action('admin_head', function() {
  * Load the payment gateway
  */
 add_action('plugins_loaded', function () {
-    error_log('=== WooCommerce Jio Pay Gateway Plugin Loaded ===');
-
     // Check if WooCommerce is active
     if (!class_exists('WC_Payment_Gateway')) {
         add_action('admin_notices', function () {
@@ -153,14 +151,26 @@ add_action('plugins_loaded', function () {
         require_once plugin_dir_path(__FILE__) . 'includes/class-jio-pay-gateway.php';
     }
 
-    // Instantiate the gateway class to register AJAX hooks
-    $jio_pay_gateway = new WC_Jio_Pay_Gateway();
-    error_log('=== WooCommerce Jio Pay Gateway Class Instantiated ===');
-
-    // Register gateway
+    // Register gateway. This only hands WooCommerce a class name, so it has
+    // to run here -- before WooCommerce builds its gateway list -- but costs
+    // nothing and loads no translations.
     add_filter('woocommerce_payment_gateways', function ($gateways) {
         $gateways[] = 'WC_Jio_Pay_Gateway';
         return $gateways;
+    });
+
+    // The gateway is instantiated on init rather than here, purely to register
+    // its AJAX hooks. Its constructor calls __(), and WordPress 6.7 raises a
+    // "text domain triggered too early" notice for any translation loaded
+    // before init. That notice was being printed straight into the JSON of
+    // wp_ajax_jio_pay_verify_payment, which the checkout could then not parse.
+    //
+    // init still runs before wp_ajax_* on admin-ajax.php, so the handlers are
+    // registered in time.
+    add_action('init', function () {
+        if (class_exists('WC_Jio_Pay_Gateway')) {
+            new WC_Jio_Pay_Gateway();
+        }
     });
 });
 
