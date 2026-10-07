@@ -87,6 +87,10 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         add_action('wp_ajax_nopriv_jio_pay_verify_payment', [$this, 'verify_payment']);
         add_action('wp_ajax_jio_pay_return_handler', [$this, 'handle_return_url']);
         add_action('wp_ajax_nopriv_jio_pay_return_handler', [$this, 'handle_return_url']);
+        // The amount the popup charges is read from the server at payment
+        // time, not from the page-load snapshot.
+        add_action('wp_ajax_jio_pay_get_payment_amount', [$this, 'get_payment_amount']);
+        add_action('wp_ajax_nopriv_jio_pay_get_payment_amount', [$this, 'get_payment_amount']);
         add_action('wp_ajax_jio_pay_store_merchant_tr_id', [$this, 'store_merchant_tr_id']);
         add_action('wp_ajax_nopriv_jio_pay_store_merchant_tr_id', [$this, 'store_merchant_tr_id']);
         add_action('wp_ajax_jio_pay_test', [$this, 'test_ajax']);
@@ -1064,6 +1068,80 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         while (ob_get_level() > 0) {
             ob_end_clean();
         }
+    }
+
+    /**
+     * The amount this payment should actually charge.
+     *
+     * jioPayVars.amount is localised once when the checkout page renders, so
+     * it goes stale the moment the shopper changes shipping method, applies a
+     * coupon, or edits an address that moves tax. The popup was charging that
+     * stale figure while the page showed the new one.
+     *
+     * The order total wins when an order exists, because that is what
+     * verify_payment() reconciles against afterwards. Otherwise the cart is
+     * recalculated and used.
+     */
+    public function get_payment_amount()
+    {
+        ini_set('display_errors', 0);
+
+        // Deliberately not gated on the nonce. verify_payment() had to stop
+        // enforcing it on this same action, so failing hard here would block
+        // checkout outright -- worse than the bug being fixed. The order is
+        // ownership-checked instead, which is what the nonce was guarding.
+        $order_id = intval($_POST['order_id'] ?? 0);
+
+        if ($order_id) {
+            $order = wc_get_order($order_id);
+
+            if ($order && $this->order_belongs_to_shopper($order)) {
+                wp_send_json_success([
+                    'amount' => wc_format_decimal($order->get_total(), 2),
+                    'source' => 'order',
+                ]);
+            }
+        }
+
+        if (WC()->cart) {
+            WC()->cart->calculate_totals();
+
+            wp_send_json_success([
+                'amount' => wc_format_decimal(WC()->cart->get_total(''), 2),
+                'source' => 'cart',
+            ]);
+        }
+
+        wp_send_json_error(['message' => 'No order or cart is available to price.']);
+    }
+
+    /**
+     * Is this order the one the current shopper is paying for?
+     *
+     * Stops an order id typed into the request returning somebody else's
+     * total, without depending on a nonce this plugin cannot rely on.
+     */
+    private function order_belongs_to_shopper($order): bool
+    {
+        $customer_id = get_current_user_id();
+
+        if ($customer_id && (int) $order->get_customer_id() === (int) $customer_id) {
+            return true;
+        }
+
+        // The order WooCommerce is currently taking payment for in this session.
+        if (WC()->session) {
+            $awaiting = (int) WC()->session->get('order_awaiting_payment');
+
+            if ($awaiting && $awaiting === $order->get_id()) {
+                return true;
+            }
+        }
+
+        // Guests returning via an order-pay link carry its key.
+        $key = isset($_POST['order_key']) ? sanitize_text_field(wp_unslash($_POST['order_key'])) : '';
+
+        return $key !== '' && hash_equals((string) $order->get_order_key(), $key);
     }
 
     /**

@@ -724,7 +724,48 @@ jQuery(document).ready(function ($) {
         }, 500);
     }
 
+    // Ask the server what this payment should charge, then open the popup.
+    //
+    // jioPayVars.amount is baked into the page when it renders, so it is stale
+    // the moment the shopper changes shipping method, applies a coupon, or
+    // edits an address that moves tax. Charging that figure meant the popup
+    // and the order disagreed, and verify_payment() then rejected the payment
+    // as an amount mismatch after the customer had been charged.
     function initiateJioPayment() {
+        $.post(jioPayVars.ajax_url, {
+            action: 'jio_pay_get_payment_amount',
+            nonce: jioPayVars.nonce,
+            order_id: window.currentOrderId || 0,
+            order_key: window.currentOrderKey || ''
+        }).done(function (response) {
+            if (response && response.success && response.data && response.data.amount) {
+                console.log('[JioPay] Charging', response.data.amount, 'from', response.data.source);
+                openJioPayPopup(response.data.amount);
+                return;
+            }
+
+            console.error('[JioPay] Could not price the payment:', response);
+            failBeforeCharging();
+        }).fail(function (xhr, status) {
+            console.error('[JioPay] Amount lookup failed:', status);
+            failBeforeCharging();
+        });
+    }
+
+    // Nothing has been charged at this point, so stopping is always safe --
+    // and safer than opening the popup on a figure we could not confirm.
+    function failBeforeCharging() {
+        $('body').removeClass('processing');
+        $('.checkout-button, #place_order').prop('disabled', false);
+        refreshCheckoutForRetry();
+        showErrorNotification(
+            'Could Not Start Payment',
+            'We could not confirm your order total, so the payment was not started.' +
+            '<br><br>Nothing has been charged. Please refresh the page and try again.'
+        );
+    }
+
+    function openJioPayPopup(resolvedAmount) {
         // Check if we're in test mode
         if (jioPayVars.use_test_data) {
             // Show test mode confirmation
@@ -779,7 +820,7 @@ jQuery(document).ready(function ($) {
                 window.jioPaymentHandled = false;
 
                 const paymentOptions = {
-                    amount: parseFloat(jioPayVars.amount).toFixed(2),
+                    amount: parseFloat(resolvedAmount).toFixed(2),
                     env: jioPayVars.environment,
                     merchantId: jioPayVars.merchant_id,
                     aggId: jioPayVars.agregator_id,
