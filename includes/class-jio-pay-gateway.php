@@ -96,6 +96,17 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         add_action('wp_ajax_jio_pay_test', [$this, 'test_ajax']);
         add_action('wp_ajax_nopriv_jio_pay_test', [$this, 'test_ajax']);
 
+        // Server-side Jio API endpoints. These exist so the merchant secret
+        // stays in the database: the browser asks for a payment to be
+        // started and we sign and send it, rather than handing the secret
+        // out and letting the browser sign for itself.
+        add_action('wp_ajax_jio_pay_initiate_sale', [$this, 'ajax_initiate_sale']);
+        add_action('wp_ajax_nopriv_jio_pay_initiate_sale', [$this, 'ajax_initiate_sale']);
+        add_action('wp_ajax_jio_pay_generate_qr', [$this, 'ajax_generate_qr']);
+        add_action('wp_ajax_nopriv_jio_pay_generate_qr', [$this, 'ajax_generate_qr']);
+        add_action('wp_ajax_jio_pay_txn_status', [$this, 'ajax_txn_status']);
+        add_action('wp_ajax_nopriv_jio_pay_txn_status', [$this, 'ajax_txn_status']);
+
         // Refund endpoints (admin only)
         add_action('wp_ajax_jio_pay_process_refund', [$this, 'ajax_process_refund']);
         add_action('wp_ajax_jio_pay_get_refund_status', [$this, 'ajax_get_refund_status']);
@@ -1725,4 +1736,260 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     }
 
     
+
+    /* ---------------------------------------------------------------------
+     * Server-side Jio API endpoints
+     *
+     * The browser never sees the merchant secret, and never sets the amount.
+     * It names the order it is paying for; we price that order ourselves,
+     * mint the merchant transaction number, sign the payload and call Jio.
+     * ------------------------------------------------------------------- */
+
+    /**
+     * Build the API service from stored settings.
+     */
+    private function service()
+    {
+        if (!class_exists('WC_Jio_Pay_Service')) {
+            require_once JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-service.php';
+        }
+
+        return WC_Jio_Pay_Service::from_settings();
+    }
+
+    /**
+     * Resolve the order the browser claims to be paying for, and its total.
+     *
+     * The amount is read from the order here rather than accepted from the
+     * request. That is the point of the endpoint: a tampered amount in the
+     * POST cannot change what Jio is asked to charge.
+     *
+     * @return array{order: WC_Order|null, amount: string}|WP_Error
+     */
+    private function resolve_payment_context()
+    {
+        $order_id = intval($_POST['order_id'] ?? 0);
+
+        if ($order_id) {
+            $order = wc_get_order($order_id);
+
+            if (!$order) {
+                return new WP_Error('jio_pay_no_order', 'That order could not be found.');
+            }
+
+            if (!$this->order_belongs_to_shopper($order)) {
+                return new WP_Error('jio_pay_not_your_order', 'That order does not belong to this session.');
+            }
+
+            return [
+                'order'  => $order,
+                'amount' => wc_format_decimal($order->get_total(), 2),
+            ];
+        }
+
+        // No order yet (the popup can open before the order is created).
+        if (WC()->cart) {
+            WC()->cart->calculate_totals();
+
+            return [
+                'order'  => null,
+                'amount' => wc_format_decimal(WC()->cart->get_total(''), 2),
+            ];
+        }
+
+        return new WP_Error('jio_pay_nothing_to_charge', 'No order or cart is available to price.');
+    }
+
+    /**
+     * The email to put on the transaction.
+     *
+     * Taken from the order when there is one, so it cannot be swapped for
+     * somebody else's address in the request.
+     */
+    private function resolve_customer_email($order)
+    {
+        if ($order && $order->get_billing_email()) {
+            return $order->get_billing_email();
+        }
+
+        $posted = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
+        if ($posted && is_email($posted)) {
+            return $posted;
+        }
+
+        $user = wp_get_current_user();
+
+        return $user->ID ? $user->user_email : '';
+    }
+
+    /**
+     * Record the transaction number on the order so a later status query or
+     * return callback can be matched back to it.
+     */
+    private function remember_txn_no($order, $merchant_txn_no)
+    {
+        if (!$order) {
+            return;
+        }
+
+        $order->update_meta_data('_jio_pay_merchant_txn_no', $merchant_txn_no);
+        $order->update_meta_data('_jio_pay_merchant_tr_id', $merchant_txn_no);
+        $order->save();
+    }
+
+    /**
+     * AJAX: start a sale (netbanking or card) through Jio.
+     */
+    public function ajax_initiate_sale()
+    {
+        $this->start_output_capture();
+        ini_set('display_errors', 0);
+
+        try {
+            $context = $this->resolve_payment_context();
+            if (is_wp_error($context)) {
+                $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
+            }
+
+            $mode = isset($_POST['mode']) ? strtoupper(sanitize_text_field(wp_unslash($_POST['mode']))) : '';
+            if ($mode === '') {
+                $this->send_json_error(['message' => 'No payment mode was given.']);
+            }
+
+            $merchant_txn_no = WC_Jio_Pay_Service::generate_merchant_txn_no();
+            $service         = $this->service();
+
+            $args = [
+                'amount'          => $context['amount'],
+                'email'           => $this->resolve_customer_email($context['order']),
+                'merchant_txn_no' => $merchant_txn_no,
+                'return_url'      => add_query_arg('action', 'jio_pay_return_handler', admin_url('admin-ajax.php')),
+            ];
+
+            // Card details, when the mode needs them. They are passed
+            // straight through to Jio and are never written to the database
+            // or the log in full -- see WC_Jio_Pay_Service::redact().
+            foreach (['cardNo', 'cvv', 'cardExpiry', 'nameOnCard', 'customerName'] as $field) {
+                if (isset($_POST[$field]) && $_POST[$field] !== '') {
+                    $args[$field] = sanitize_text_field(wp_unslash($_POST[$field]));
+                }
+            }
+
+            if (empty($args['customerName']) && $context['order']) {
+                $args['customerName'] = trim($context['order']->get_billing_first_name() . ' ' . $context['order']->get_billing_last_name());
+            }
+
+            $result = $service->initiate_sale($mode, $args);
+
+            if (is_wp_error($result)) {
+                $this->send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
+            }
+
+            $this->remember_txn_no($context['order'], $merchant_txn_no);
+
+            $this->send_json_success([
+                'merchantTxnNo' => $merchant_txn_no,
+                'amount'        => $context['amount'],
+                'http_code'     => $result['http_code'],
+                'response'      => $result['data'],
+                'raw'           => $result['data'] === null ? $result['raw'] : null,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('Jio Pay initiate_sale failed: ' . $e->getMessage());
+            $this->send_json_error(['message' => 'Could not start the payment. Please try again.']);
+        }
+    }
+
+    /**
+     * AJAX: generate a UPI QR through Jio.
+     */
+    public function ajax_generate_qr()
+    {
+        $this->start_output_capture();
+        ini_set('display_errors', 0);
+
+        try {
+            $context = $this->resolve_payment_context();
+            if (is_wp_error($context)) {
+                $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
+            }
+
+            $merchant_txn_no = WC_Jio_Pay_Service::generate_merchant_txn_no();
+            $service         = $this->service();
+
+            $result = $service->generate_qr([
+                'amount'          => $context['amount'],
+                'email'           => $this->resolve_customer_email($context['order']),
+                'merchant_ref_no' => $merchant_txn_no,
+                'invoice_no'      => $context['order'] ? 'INV' . $context['order']->get_id() : 'INV' . $merchant_txn_no,
+            ]);
+
+            if (is_wp_error($result)) {
+                $this->send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
+            }
+
+            $this->remember_txn_no($context['order'], $merchant_txn_no);
+
+            $this->send_json_success([
+                'merchantRefNo' => $merchant_txn_no,
+                'amount'        => $context['amount'],
+                'http_code'     => $result['http_code'],
+                'response'      => $result['data'],
+                'raw'           => $result['data'] === null ? $result['raw'] : null,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('Jio Pay generate_qr failed: ' . $e->getMessage());
+            $this->send_json_error(['message' => 'Could not generate the QR code. Please try again.']);
+        }
+    }
+
+    /**
+     * AJAX: query a transaction's status at Jio.
+     *
+     * The transaction number is read from the order rather than trusted from
+     * the request, so this cannot be used to enumerate other people's
+     * transactions.
+     */
+    public function ajax_txn_status()
+    {
+        $this->start_output_capture();
+        ini_set('display_errors', 0);
+
+        try {
+            $order_id = intval($_POST['order_id'] ?? 0);
+            if (!$order_id) {
+                $this->send_json_error(['message' => 'No order was given.']);
+            }
+
+            $order = wc_get_order($order_id);
+            if (!$order || !$this->order_belongs_to_shopper($order)) {
+                $this->send_json_error(['message' => 'That order does not belong to this session.']);
+            }
+
+            $merchant_txn_no = $order->get_meta('_jio_pay_merchant_txn_no');
+            if (!$merchant_txn_no) {
+                $merchant_txn_no = $order->get_meta('_jio_pay_merchant_tr_id');
+            }
+
+            if (!$merchant_txn_no) {
+                $this->send_json_error(['message' => 'This order has no Jio transaction to check.']);
+            }
+
+            $result = $this->service()->check_status($merchant_txn_no);
+
+            if (is_wp_error($result)) {
+                $this->send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
+            }
+
+            $this->send_json_success([
+                'merchantTxnNo' => $merchant_txn_no,
+                'http_code'     => $result['http_code'],
+                'response'      => $result['data'],
+                'raw'           => $result['data'] === null ? $result['raw'] : null,
+            ]);
+        } catch (\Throwable $e) {
+            error_log('Jio Pay txn_status failed: ' . $e->getMessage());
+            $this->send_json_error(['message' => 'Could not check the payment status.']);
+        }
+    }
 }

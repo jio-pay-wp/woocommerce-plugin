@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 1.3.5
+ * Version: 1.4.0
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '1.3.5');
+define('JIO_PAY_VERSION', '1.4.0');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -144,6 +144,12 @@ add_action('plugins_loaded', function () {
             echo '<div class="notice notice-error"><p>WooCommerce Jio Pay Gateway requires WooCommerce to be active.</p></div>';
         });
         return;
+    }
+
+    // Include the API service. Every call to Jio goes through this, server
+    // side, so the merchant secret never has to reach the browser.
+    if (!class_exists('WC_Jio_Pay_Service')) {
+        require_once plugin_dir_path(__FILE__) . 'includes/class-jio-pay-service.php';
     }
 
     // Include the gateway class
@@ -355,12 +361,10 @@ add_action('wp_enqueue_scripts', function () {
         $environment = $options['environment'] ?? 'uat';
         if ($environment === 'prod') {
             $merchant_id = $options['live_merchant_id'] ?? '';
-            $secret_key = $options['live_secret_key'] ?? '';
             $agregator_id = $options['live_agregator_id'] ?? '';
             $mcc_code = $options['live_mcc_code'] ?? '';
         } else {
             $merchant_id = $options['uat_merchant_id'] ?? '';
-            $secret_key = $options['uat_secret_key'] ?? '';
             $agregator_id = $options['uat_agregator_id'] ?? '';
             $mcc_code = $options['uat_mcc_code'] ?? '';
         }
@@ -415,7 +419,18 @@ add_action('wp_enqueue_scripts', function () {
             'payment_method' => $options['payment_method'] ?? 'all',
             'allowed_payment_types' => $options['allowed_payment_types'] ?? 'all',
             'timeout' => (int) (($options['timeout'] ?? '') === '' ? 300 : $options['timeout']),
-            'secret_key' => $secret_key,
+            // The merchant secret is deliberately absent. It used to be
+            // published here so Jio's SDK could compute secureHash in the
+            // browser; it is now held in the database and used only by
+            // WC_Jio_Pay_Service, server side. The SDK calls these endpoints
+            // instead of signing for itself.
+            'endpoints' => [
+                'initiate_sale' => 'jio_pay_initiate_sale',
+                'generate_qr'   => 'jio_pay_generate_qr',
+                'txn_status'    => 'jio_pay_txn_status',
+                'amount'        => 'jio_pay_get_payment_amount',
+                'verify'        => 'jio_pay_verify_payment',
+            ],
             'amount' => $total,
             'customer_email' => $customer_email,
             'customer_name' => $customer_name,

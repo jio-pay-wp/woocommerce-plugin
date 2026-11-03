@@ -1,3 +1,77 @@
+/**
+ * Client for the plugin's server-side Jio endpoints.
+ *
+ * Nothing here knows the merchant secret. Each call names the order being
+ * paid for; the server prices that order, mints the transaction number,
+ * signs the payload and talks to Jio. See includes/class-jio-pay-service.php.
+ */
+window.JioPayApi = (function () {
+    'use strict';
+
+    function post(action, payload) {
+        var body = Object.assign({
+            action: action,
+            nonce: jioPayVars.nonce
+        }, payload || {});
+
+        return new Promise(function (resolve, reject) {
+            jQuery.post(jioPayVars.ajax_url, body)
+                .done(function (response) {
+                    if (response && response.success) {
+                        resolve(response.data);
+                        return;
+                    }
+
+                    reject(new Error(
+                        (response && response.data && response.data.message) ||
+                        'Jio Pay did not accept the request.'
+                    ));
+                })
+                .fail(function (xhr, status) {
+                    // A 200 with an unparseable body lands here too. Never
+                    // report that as a plain failure: the charge may have
+                    // gone through.
+                    reject(new Error(
+                        status === 'parsererror'
+                            ? 'The payment status could not be confirmed. Do not pay again; check your order first.'
+                            : 'Could not reach the store to process the payment.'
+                    ));
+                });
+        });
+    }
+
+    return {
+        /**
+         * Start a netbanking or card sale.
+         * @param {string} mode 'NB', 'CC' or 'DC'.
+         * @param {object} details Card fields, for CC/DC only.
+         */
+        initiateSale: function (mode, details) {
+            return post(jioPayVars.endpoints.initiate_sale, Object.assign({
+                mode: mode,
+                order_id: window.currentOrderId || 0,
+                order_key: window.currentOrderKey || ''
+            }, details || {}));
+        },
+
+        /** Generate a UPI QR for the current order. */
+        generateQr: function () {
+            return post(jioPayVars.endpoints.generate_qr, {
+                order_id: window.currentOrderId || 0,
+                order_key: window.currentOrderKey || ''
+            });
+        },
+
+        /** Ask Jio what happened to this order's transaction. */
+        checkStatus: function () {
+            return post(jioPayVars.endpoints.txn_status, {
+                order_id: window.currentOrderId || 0,
+                order_key: window.currentOrderKey || ''
+            });
+        }
+    };
+})();
+
 jQuery(document).ready(function ($) {
 
     // ============================================================
@@ -833,7 +907,9 @@ jQuery(document).ready(function ($) {
                     allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB", "UPI_QR", "UPI_VPA", "CREDIT_CARD", "DEBIT_CARD"]),
                     theme: jioPayVars.theme || { color: "#E39B2B" },
                     timeOut: jioPayVars.timeout || 300,
-                    secretKey: jioPayVars.secret_key,
+                    // secretKey is intentionally not passed. The merchant
+                    // secret stays on the server; signing and the calls to
+                    // Jio happen in WC_Jio_Pay_Service via JioPayApi below.
                     merchantTrId: merchantTrId,
                     returnURL: '', //jioPayVars.return_url, // Return URL for POST callback
                     onSuccess: handlePaymentSuccess,
