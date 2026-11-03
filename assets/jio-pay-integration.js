@@ -879,7 +879,6 @@ jQuery(document).ready(function ($) {
         $('.checkout-button').prop('disabled', true);
 
         // console.log('Initiating Jio Pay payment...', jioPayVars);
-        // console.log('Using Agregator ID:', jioPayVars.agregator_id);
         try {
             if (typeof jioPaySDK !== 'undefined') {
                 // Get customer data - prioritize order data, then form data, then defaults
@@ -916,10 +915,10 @@ jQuery(document).ready(function ($) {
 
                 const paymentOptions = {
                     amount: parseFloat(resolvedAmount).toFixed(2),
-                    env: jioPayVars.environment,
-                    merchantId: jioPayVars.merchant_id,
-                    aggId: jioPayVars.agregator_id,
-                    mcc_code: jioPayVars.mcc_code,
+                    // env, merchantId, aggId and mcc_code are no longer
+                    // published to the page. The server supplies its own
+                    // identifiers when it builds the Jio payload; see
+                    // docs/SDK_INTEGRATION_CONTRACT.md.
                     customerEmailID: customerData.email,
                     email: customerData.email,
                     userName: customerData.name,

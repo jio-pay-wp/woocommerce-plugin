@@ -2023,9 +2023,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'amount'              => $context['amount'],
                 'currency'            => 'INR',
                 'currencyCode'        => WC_Jio_Pay_Service::CURRENCY_CODE,
-                'env'                 => $service->get_environment(),
-                'merchantId'          => $service->get_merchant_id(),
-                'aggId'               => $options[($service->get_environment() === 'prod' ? 'live' : 'uat') . '_agregator_id'] ?? '',
+                // merchantId, aggregatorID and the environment name are not
+                // returned. The popup no longer builds Jio requests, so it has
+                // no use for them, and the merchant's identity is not the
+                // browser's business. testMode is all a popup needs to badge
+                // itself during certification.
+                'testMode'            => $service->get_environment() !== 'prod',
                 'merchantName'        => get_bloginfo('name'),
                 'merchantLogo'        => $this->resolve_merchant_logo($options),
                 'allowedPaymentTypes' => $this->resolve_payment_types($options),

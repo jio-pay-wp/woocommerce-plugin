@@ -357,17 +357,11 @@ add_action('wp_enqueue_scripts', function () {
         // Get plugin settings
         $options = get_option('woocommerce_jio_pay_settings', []);
         
-        // Determine which environment credentials to use
-        $environment = $options['environment'] ?? 'uat';
-        if ($environment === 'prod') {
-            $merchant_id = $options['live_merchant_id'] ?? '';
-            $agregator_id = $options['live_agregator_id'] ?? '';
-            $mcc_code = $options['live_mcc_code'] ?? '';
-        } else {
-            $merchant_id = $options['uat_merchant_id'] ?? '';
-            $agregator_id = $options['uat_agregator_id'] ?? '';
-            $mcc_code = $options['uat_mcc_code'] ?? '';
-        }
+        // Credentials are deliberately not read here. Nothing on this page
+        // needs them: WC_Jio_Pay_Service loads them server side when a
+        // payment is actually made. Reading them into a variable that feeds
+        // wp_localize_script is how the secret came to be published in the
+        // first place.
 
         // Get cart/order data for payment
         $total = '0.00';
@@ -411,10 +405,10 @@ add_action('wp_enqueue_scripts', function () {
         wp_localize_script('jio-pay-integration', 'jioPayVars', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('jio_pay_nonce'),
-            'merchant_id' => $merchant_id,
-            'environment' => $environment,
-            'agregator_id' => $agregator_id,
-            'mcc_code' => $mcc_code,
+            // merchant_id, agregator_id, mcc_code and environment are not
+            // here on purpose. The server builds every Jio payload now, so it
+            // supplies its own identifiers; publishing them bought nothing
+            // and handed anyone viewing source the merchant's full identity.
             'theme' => $options['theme'] ?? 'light',
             'payment_method' => $options['payment_method'] ?? 'all',
             'allowed_payment_types' => $options['allowed_payment_types'] ?? 'all',
@@ -432,7 +426,8 @@ add_action('wp_enqueue_scripts', function () {
                 'amount'        => 'jio_pay_get_payment_amount',
                 'verify'        => 'jio_pay_verify_payment',
             ],
-            'amount' => $total,
+            // No 'amount' either: a total baked in at render time is the
+            // bug fixed in 1.3.5. Ask jio_pay_init_checkout for the live one.
             'customer_email' => $customer_email,
             'customer_name' => $customer_name,
             'use_test_data' => $use_test_data,

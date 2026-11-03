@@ -77,9 +77,7 @@ nonce=<jioPayVars.nonce>
     "amount": "554.24",
     "currency": "INR",
     "currencyCode": "356",
-    "env": "prod",
-    "merchantId": "JP2001000011459",
-    "aggId": "JP2000000000001",
+    "testMode": false,
     "merchantName": "Techiesms",
     "merchantLogo": "https://store.example.com/logo.png",
     "allowedPaymentTypes": ["NB", "UPI_QR", "CREDIT_CARD", "DEBIT_CARD"],
@@ -101,6 +99,11 @@ Notes:
 - `timeOut` is in **seconds**.
 - Keep `checkoutRef` for the rest of the session. It is unguessable and bound
   to the shopper's session, so it cannot be reused from another browser.
+- **`merchantId`, `aggregatorID`, the MCC and the environment name are not
+  returned, and are no longer on the checkout page at all.** The SDK does not
+  build Jio requests any more, so it has no use for them, and there is no
+  reason to hand every visitor the merchant's identity. `testMode` is there if
+  the popup wants to badge itself during certification.
 
 ---
 
@@ -190,7 +193,7 @@ accepting them from the browser is what made the old flow unsafe:
 | `amount` | Read from the order. A tampered amount cannot change the charge, and this also fixes a real bug where a shipping change left the popup showing a stale total. |
 | `merchantTxnNo` | Minted server side so a status reply can be trusted. |
 | `returnURL` | Set to the plugin's own handler. |
-| `txnDate`, `currencyCode`, `aggregatorID`, `merchantId` | Server side, from stored settings. |
+| `txnDate`, `currencyCode`, `aggregatorID`, `merchantId`, MCC | Server side, from stored settings. Not published to the page, so the SDK cannot read them even if it wanted to. |
 
 ## Errors
 
@@ -227,7 +230,12 @@ unconfirmed, tell them not to pay again, and call event 3.
 4. **Is `STATUS` signed?** Your sample `STATUS` call carries no `secureHash`
    and our production refunds have worked without one. Confirm, so we can turn
    signing on if needed.
-5. **Card data and PCI scope.** Routing `cardNo`/`cvv` through the merchant's
+5. **Is the MCC meant to be in the payload?** The plugin has an MCC setting
+   per environment, and the old SDK config carried `mcc_code`, but none of
+   your documented `initiateSale` or `generateQR` samples include it. We
+   currently do not send it. Confirm whether it belongs in either payload --
+   and therefore in the `secureHash`.
+6. **Card data and PCI scope.** Routing `cardNo`/`cvv` through the merchant's
    WordPress server puts every store in PCI DSS scope (SAQ-A to SAQ-D). This
    is unavoidable while `secureHash` covers the card fields. Can you offer
    hosted card capture or tokenisation, so card data goes browser-to-Jio and
