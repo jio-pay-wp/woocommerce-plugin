@@ -1,0 +1,7 @@
+# Keep runtime logs and local test scaffolding out of release archives.
+# logs/refund-audit.log holds real customer PII (emails, order ids, auth ids)
+# and was shipping inside every release ZIP built with `git archive`.
+logs/ export-ignore
+test-update-server.php export-ignore
+.gitattributes export-ignore
+.DS_Store export-ignore
