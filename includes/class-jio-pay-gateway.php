@@ -1768,37 +1768,57 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      * ------------------------------------------------------------------- */
 
     /**
-     * Reply with the envelope, and with Jio's own fields at the top level.
+     * Reply with Jio's response and nothing else.
      *
-     * Jio has specified that initiateSale answers with a flat object --
-     * responseCode, redirectURI, tranCtx, txnAuthID, merchantTxnNo -- and
-     * their SDK reads those straight off the response body, because that is
-     * the shape it saw when it called Jio directly.
+     * initiate_sale, generate_qr and txn_status answer with exactly the
+     * object Jio returned -- no success/data envelope around it. That is the
+     * shape Jio specified and the shape their SDK reads, and these three
+     * endpoints have no other caller: the plugin's own page script only
+     * calls init_checkout, which keeps the envelope because its client
+     * depends on it.
      *
-     * Rather than make every SDK release reach one level deeper, Jio's reply
-     * is copied to the top level as well as staying under data.response. The
-     * envelope keys are never overwritten, so a future Jio field called
-     * success or data cannot corrupt the response; it stays reachable at
-     * data.response where the contract puts it.
-     *
-     * @param array      $payload Envelope payload, served as data.
-     * @param array|null $jio     Jio's parsed reply.
+     * @param array|null $jio      Jio's parsed reply.
+     * @param string     $raw_body Raw body, used only when parsing failed.
      */
-    private function send_json_passthrough(array $payload, $jio)
+    private function send_jio_reply($jio, $raw_body = '')
     {
-        $body = ['success' => true, 'data' => $payload];
-
-        if (is_array($jio)) {
-            foreach ($jio as $key => $value) {
-                if ($key === 'success' || $key === 'data') {
-                    continue;
-                }
-                $body[$key] = $value;
-            }
+        if (!is_array($jio)) {
+            // Jio answered with something that is not JSON. There is no
+            // reply to forward, and returning nothing would read as a
+            // success to a caller checking responseCode, so say so in the
+            // same shape.
+            $this->send_jio_error(
+                'jio_pay_unreadable_response',
+                'The payment gateway returned an unreadable response. Do not retry; check the payment status.',
+                ['raw' => $raw_body]
+            );
         }
 
         $this->discard_buffered_output();
-        wp_send_json($body);
+        wp_send_json($jio);
+    }
+
+    /**
+     * Report a plugin-side failure in the shape Jio's errors take.
+     *
+     * These endpoints no longer carry an envelope, so a caller has no
+     * success flag to test. It tests responseCode instead -- anything other
+     * than R1000 is a failure -- so a plugin error has to arrive looking the
+     * same way, or it reads as a successful payment.
+     *
+     * @param string $code
+     * @param string $message
+     * @param array  $extra
+     */
+    private function send_jio_error($code, $message, array $extra = [])
+    {
+        $this->discard_buffered_output();
+
+        wp_send_json(array_merge([
+            'responseCode'        => $code,
+            'responseDescription' => $message,
+            'responseMessage'     => $message,
+        ], $extra));
     }
 
     /**
@@ -2129,7 +2149,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         try {
             $context = $this->resolve_payment_context();
             if (is_wp_error($context)) {
-                $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
+                $this->send_jio_error($context->get_error_code(), $context->get_error_message());
             }
 
             // The popup sends back whichever code it displayed, so accept
@@ -2138,12 +2158,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             $requested = sanitize_text_field(wp_unslash((string) $requested));
 
             if ($requested === '') {
-                $this->send_json_error(['message' => 'No payment type was given.', 'code' => 'jio_pay_missing_payment_type']);
+                $this->send_jio_error('jio_pay_missing_payment_type', 'No payment type was given.');
             }
 
             $resolved = WC_Jio_Pay_Service::resolve_payment_type($requested);
             if (is_wp_error($resolved)) {
-                $this->send_json_error(['message' => $resolved->get_error_message(), 'code' => $resolved->get_error_code()]);
+                $this->send_jio_error($resolved->get_error_code(), $resolved->get_error_message());
             }
 
             // Enforce the merchant's own list, not just what the service can
@@ -2159,10 +2179,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             ][strtoupper($requested)] ?? strtoupper($requested);
 
             if (!in_array($canonical, $enabled, true)) {
-                $this->send_json_error([
-                    'message' => 'That payment method is not available on this store.',
-                    'code'    => 'jio_pay_payment_type_disabled',
-                ]);
+                $this->send_jio_error('jio_pay_payment_type_disabled', 'That payment method is not available on this store.');
             }
 
             $merchant_txn_no = WC_Jio_Pay_Service::generate_merchant_txn_no();
@@ -2179,19 +2196,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 ]);
 
                 if (is_wp_error($qr)) {
-                    $this->send_json_error(['message' => $qr->get_error_message(), 'code' => $qr->get_error_code()]);
+                    $this->send_jio_error($qr->get_error_code(), $qr->get_error_message());
                 }
 
                 $this->remember_txn_no($context['order'], $merchant_txn_no);
 
-                $this->send_json_passthrough([
-                    'paymentType'   => $requested,
-                    'merchantTxnNo' => $merchant_txn_no,
-                    'amount'        => $context['amount'],
-                    'http_code'     => $qr['http_code'],
-                    'response'      => $qr['data'],
-                    'raw'           => $qr['data'] === null ? $qr['raw'] : null,
-                ], $qr['data']);
+                $this->send_jio_reply($qr['data'], $qr['raw']);
             }
 
             $mode = $resolved['mode'];
@@ -2219,22 +2229,15 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             $result = $service->initiate_sale($mode, $args);
 
             if (is_wp_error($result)) {
-                $this->send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
+                $this->send_jio_error($result->get_error_code(), $result->get_error_message());
             }
 
             $this->remember_txn_no($context['order'], $merchant_txn_no);
 
-            $this->send_json_passthrough([
-                'paymentType'   => $requested,
-                'merchantTxnNo' => $merchant_txn_no,
-                'amount'        => $context['amount'],
-                'http_code'     => $result['http_code'],
-                'response'      => $result['data'],
-                'raw'           => $result['data'] === null ? $result['raw'] : null,
-            ], $result['data']);
+            $this->send_jio_reply($result['data'], $result['raw']);
         } catch (\Throwable $e) {
             error_log('Jio Pay initiate_sale failed: ' . $e->getMessage());
-            $this->send_json_error(['message' => 'Could not start the payment. Please try again.', 'code' => 'jio_pay_internal_error']);
+            $this->send_jio_error('jio_pay_internal_error', 'Could not start the payment. Please try again.');
         }
     }
 
@@ -2249,17 +2252,14 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         try {
             $context = $this->resolve_payment_context();
             if (is_wp_error($context)) {
-                $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
+                $this->send_jio_error($context->get_error_code(), $context->get_error_message());
             }
 
             // Same enablement check initiate_sale makes. This endpoint is
             // reachable directly, so without it UPI QR could be obtained
             // from a store that has switched UPI QR off.
             if (!in_array('UPI_QR', $this->resolve_payment_types(get_option('woocommerce_jio_pay_settings', [])), true)) {
-                $this->send_json_error([
-                    'message' => 'That payment method is not available on this store.',
-                    'code'    => 'jio_pay_payment_type_disabled',
-                ]);
+                $this->send_jio_error('jio_pay_payment_type_disabled', 'That payment method is not available on this store.');
             }
 
             $merchant_txn_no = WC_Jio_Pay_Service::generate_merchant_txn_no();
@@ -2273,21 +2273,15 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             ]);
 
             if (is_wp_error($result)) {
-                $this->send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
+                $this->send_jio_error($result->get_error_code(), $result->get_error_message());
             }
 
             $this->remember_txn_no($context['order'], $merchant_txn_no);
 
-            $this->send_json_success([
-                'merchantRefNo' => $merchant_txn_no,
-                'amount'        => $context['amount'],
-                'http_code'     => $result['http_code'],
-                'response'      => $result['data'],
-                'raw'           => $result['data'] === null ? $result['raw'] : null,
-            ]);
+            $this->send_jio_reply($result['data'], $result['raw']);
         } catch (\Throwable $e) {
             error_log('Jio Pay generate_qr failed: ' . $e->getMessage());
-            $this->send_json_error(['message' => 'Could not generate the QR code. Please try again.', 'code' => 'jio_pay_internal_error']);
+            $this->send_jio_error('jio_pay_internal_error', 'Could not generate the QR code. Please try again.');
         }
     }
 
@@ -2308,12 +2302,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             // the other endpoints.
             $context = $this->resolve_payment_context();
             if (is_wp_error($context)) {
-                $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
+                $this->send_jio_error($context->get_error_code(), $context->get_error_message());
             }
 
             $order = $context['order'];
             if (!$order) {
-                $this->send_json_error(['message' => 'There is no order to check yet.', 'code' => 'jio_pay_no_order_yet']);
+                $this->send_jio_error('jio_pay_no_order_yet', 'There is no order to check yet.');
             }
 
             $merchant_txn_no = $order->get_meta('_jio_pay_merchant_txn_no');
@@ -2322,7 +2316,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             }
 
             if (!$merchant_txn_no) {
-                $this->send_json_error(['message' => 'This order has no Jio transaction to check.', 'code' => 'jio_pay_no_transaction']);
+                $this->send_jio_error('jio_pay_no_transaction', 'This order has no Jio transaction to check.');
             }
 
             // Short-lived cache in front of Jio.
@@ -2341,13 +2335,13 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             $cached    = get_transient($cache_key);
 
             if (is_array($cached)) {
-                $this->send_json_passthrough($cached + ['cached' => true], $cached['response'] ?? null);
+                $this->send_jio_reply($cached['response'] ?? null, (string) ($cached['raw'] ?? ''));
             }
 
             $result = $this->service()->check_status($merchant_txn_no);
 
             if (is_wp_error($result)) {
-                $this->send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
+                $this->send_jio_error($result->get_error_code(), $result->get_error_message());
             }
 
             $payload = [
@@ -2359,10 +2353,10 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
             set_transient($cache_key, $payload, 5);
 
-            $this->send_json_passthrough($payload, $result['data']);
+            $this->send_jio_reply($result['data'], $result['raw']);
         } catch (\Throwable $e) {
             error_log('Jio Pay txn_status failed: ' . $e->getMessage());
-            $this->send_json_error(['message' => 'Could not check the payment status.', 'code' => 'jio_pay_internal_error']);
+            $this->send_jio_error('jio_pay_internal_error', 'Could not check the payment status.');
         }
     }
 }

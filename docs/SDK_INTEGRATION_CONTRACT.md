@@ -324,43 +324,55 @@ URLs, but with `returnURL` unset and the non-production redirect path taken.
 to production URLs. Please make these comparisons case-insensitive, or
 document the requirement; the plugin sends lower case either way.
 
-## Reading the response (the one thing to get right)
+## Reading the response
 
-Every reply is the WordPress envelope. Jio's own reply is nested inside it,
-at `data.response` -- it is **not** at the top level:
+`initiate_sale`, `generate_qr` and `txn_status` answer with **exactly the
+object Jio returned, and nothing else**. There is no envelope around it:
+
+```json
+{
+  "responseCode": "R1000",
+  "responseMessage": "...",
+  "redirectURI": "https://...",
+  "tranCtx": "...",
+  "txnAuthID": "...",
+  "merchantTxnNo": "3550340415"
+}
+```
+
+So code written against the old direct-to-Jio flow needs no change at all:
 
 ```js
 const body = (await axios.post(ajaxUrl, payload)).data;
-
-body.success                        // true / false
-body.data.merchantTxnNo             // minted by the server
-body.data.amount                    // what is actually being charged
-body.data.response.responseCode     // Jio's code, e.g. "R1000"
-body.data.response.redirectURI      // Jio's fields, verbatim
-body.data.response.tranCtx
-body.data.code                      // on failure, e.g. "jio_pay_expired_ref"
+if (body?.responseCode === "R1000") { … }          // works
+if (body?.txnResponseCode === "0000") { … }        // status, works
 ```
 
-Jio's fields are **also copied to the top level**, so a check written against
-the old direct-to-Jio flow keeps working unchanged:
+`init_checkout` is the exception: it is called by the merchant's page, not
+the SDK, and keeps the `{success, data}` envelope its own client depends on.
 
-```js
-body.responseCode === "R1000"                  // works
-body.data.response.responseCode === "R1000"    // also works
-body.txnResponseCode === "0000"                // status, works
+### Errors
+
+There is no `success` flag to test, so a plugin-side failure is reported in
+the same shape a Jio failure takes -- a `responseCode` that is not `R1000`:
+
+```json
+{
+  "responseCode": "jio_pay_payment_type_disabled",
+  "responseDescription": "That payment method is not available on this store.",
+  "responseMessage": "That payment method is not available on this store."
+}
 ```
 
-Both are supported deliberately. The top-level copy means no SDK release has
-to reach a level deeper than it does today; the nested copy is the canonical
-one and is what new code should read.
+Treat any `responseCode` other than `R1000` as a failure and show
+`responseDescription`, exactly as for a Jio error. The plugin's own codes are
+all prefixed `jio_pay_` so they are distinguishable from Jio's if needed; the
+full list is below.
 
-The envelope's own keys, `success` and `data`, are never overwritten by the
-copy. If a future Jio response contains a field with either name it is
-dropped from the top level and remains reachable at `data.response`, so it
-cannot corrupt the envelope.
-
-Error replies carry no Jio fields at all -- there is no Jio response to copy
--- so an error is always `{"success": false, "data": {"message", "code"}}`.
+One of them matters more than the rest: `jio_pay_unreadable_response` means
+Jio answered with something that was not JSON. The payment may well have been
+taken. Do not report it as a failure and do not retry -- tell the shopper the
+outcome is unconfirmed and poll `txn_status`.
 
 ## Polling `txn_status`
 
