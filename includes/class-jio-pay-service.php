@@ -152,12 +152,17 @@ class WC_Jio_Pay_Service
             'initiateSale' => 'https://jiopay.co.in/pg/api/v2/initiateSale',
             'generateQR'   => 'https://jiopay.co.in/pg/api/generateQR',
             'command'      => 'https://jiopay.co.in/tsp/pg/api/command',
+            'binDetails'   => 'https://jiopay.co.in/pg/api/bin/details',
         ];
 
         $uat = [
             'initiateSale' => 'https://uat.jiopay.co.in/tsp/pg/api/v2/initiateSale',
             'generateQR'   => 'https://uat.jiopay.co.in/tsp/pg/api/generateQR',
+            // The SDK builds this one from a different base than the rest:
+            // `${a1}/${env}/pg/api/bin/details` with a1 =
+            // https://uat.jiopay.co.in/c1. Filterable like the others.
             'command'      => 'https://uat.jiopay.co.in/tsp/pg/api/command',
+            'binDetails'   => 'https://uat.jiopay.co.in/c1/uat/pg/api/bin/details',
         ];
 
         $map = $this->environment === 'prod' ? $prod : $uat;
@@ -502,6 +507,95 @@ class WC_Jio_Pay_Service
         $this->log('STATUS request', ['payload' => $this->redact($payload)]);
 
         return $this->request($this->endpoint('command'), $payload, 'form', 'STATUS');
+    }
+
+    /**
+     * Look up what kind of card a number belongs to.
+     *
+     * This endpoint is signed differently from every other call, so it does
+     * not go through sign()/request(). Jio's SDK uses
+     * HmacSHA256(JSON.stringify(payload), secret) and sends the result in a
+     * secureHash *header*, with the payload as the JSON body -- not the
+     * sorted-values digest carried inside the body that initiateSale,
+     * generateQR and STATUS use.
+     *
+     * Because the digest covers the serialised JSON rather than a
+     * reconstruction of it, the exact bytes matter: the body is encoded once
+     * and both hashed and sent, never re-encoded in between.
+     *
+     * @param string $card_no
+     * @return array|WP_Error
+     */
+    public function bin_details($card_no)
+    {
+        if (!$this->is_configured()) {
+            return new WP_Error('jio_pay_not_configured', 'Jio Pay credentials are not configured.');
+        }
+
+        $digits = preg_replace('/\D/', '', (string) $card_no);
+
+        if (strlen($digits) < 6) {
+            return new WP_Error('jio_pay_bad_card', 'A card number is required to look up its type.');
+        }
+
+        $payload = [
+            'aggregatorID' => $this->aggregator_id !== '' ? $this->aggregator_id : null,
+            'cardNo'       => $digits,
+            'merchantId'   => $this->merchant_id,
+            'requestId'    => 'req' . wp_rand(100000, 999999),
+            'requestedAt'  => $this->api_now()->format('YmdHis'),
+            'tenantId'     => null,
+        ];
+
+        // Null fields are dropped rather than sent as null.
+        //
+        // Jio's documented sample carries tenantId: null, but their server
+        // does not verify the digest against the bytes it received -- it
+        // rebuilds a canonical form first, and that form has no null
+        // members. Sending them verbatim fails with "secure hash does not
+        // match"; dropping them returns error_code 0000. Confirmed against
+        // UAT, one field at a time.
+        $payload = array_filter($payload, static function ($value) {
+            return $value !== null;
+        });
+
+        $payload = apply_filters('jio_pay_bin_payload', $payload, $this->environment);
+
+        // Encoded once. Slashes are left unescaped so the bytes hashed are
+        // the bytes sent, whatever the payload later contains.
+        $body = wp_json_encode($payload, JSON_UNESCAPED_SLASHES);
+        $hash = hash_hmac('sha256', $body, $this->secret_key);
+
+        $this->log('bin/details request', ['payload' => $this->redact($payload)]);
+
+        $response = wp_remote_post($this->endpoint('binDetails'), [
+            'method'  => 'POST',
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'secureHash'   => $hash,
+            ],
+            'body'      => $body,
+            'timeout'   => self::HTTP_TIMEOUT,
+            'sslverify' => true,
+        ]);
+
+        if (is_wp_error($response)) {
+            $this->log('bin/details transport error', ['error' => $response->get_error_message()]);
+            return $response;
+        }
+
+        $code = (int) wp_remote_retrieve_response_code($response);
+        $raw  = (string) wp_remote_retrieve_body($response);
+        $data = $this->parse_body($raw);
+
+        $this->log('bin/details response', ['http' => $code, 'body' => is_array($data) ? $this->redact($data) : ['raw' => $raw]]);
+
+        return [
+            'success'   => $code >= 200 && $code < 300,
+            'http_code' => $code,
+            'data'      => $data,
+            'raw'       => $raw,
+        ];
     }
 
     /* ---------------------------------------------------------------------

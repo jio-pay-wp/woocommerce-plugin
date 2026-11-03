@@ -27,6 +27,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     // Static flag to prevent duplicate hook registration
     private static $hooks_registered = false;
 
+    /**
+     * How many card lookups one checkout may make in ten minutes. A shopper
+     * retyping a card needs a handful; anything beyond that is enumeration.
+     */
+    const BIN_LOOKUPS_PER_CHECKOUT = 20;
+
     public function __construct()
     {
         $this->id = 'jio_pay';
@@ -108,6 +114,8 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         add_action('wp_ajax_nopriv_jio_pay_generate_qr', [$this, 'ajax_generate_qr']);
         add_action('wp_ajax_jio_pay_txn_status', [$this, 'ajax_txn_status']);
         add_action('wp_ajax_nopriv_jio_pay_txn_status', [$this, 'ajax_txn_status']);
+        add_action('wp_ajax_jio_pay_bin_details', [$this, 'ajax_bin_details']);
+        add_action('wp_ajax_nopriv_jio_pay_bin_details', [$this, 'ajax_bin_details']);
 
         // Refund endpoints (admin only)
         add_action('wp_ajax_jio_pay_process_refund', [$this, 'ajax_process_refund']);
@@ -2297,6 +2305,71 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         } catch (\Throwable $e) {
             error_log('Jio Pay generate_qr failed: ' . $e->getMessage());
             $this->send_jio_error('jio_pay_internal_error', 'Could not generate the QR code. Please try again.');
+        }
+    }
+
+    /**
+     * AJAX: ask Jio what network and type a card belongs to.
+     *
+     * The popup calls this as the shopper types, to decide whether to offer
+     * the credit or debit flow. It is gated on a valid checkout reference:
+     * without that this would be an open BIN lookup oracle that anyone could
+     * point at Jio using the merchant's credentials.
+     */
+    public function ajax_bin_details()
+    {
+        $this->start_output_capture();
+        ini_set('display_errors', 0);
+
+        try {
+            // A checkout reference is required, not merely a resolvable
+            // context. resolve_payment_context() falls back to the cart,
+            // and an empty cart resolves perfectly well -- which left this
+            // open to anyone, as a BIN lookup oracle driven by the
+            // merchant's Jio credentials.
+            $ref = '';
+            foreach (['checkout_ref', 'checkoutRef'] as $field) {
+                if (!empty($_POST[$field])) {
+                    $ref = sanitize_text_field(wp_unslash($_POST[$field]));
+                    break;
+                }
+            }
+
+            if ($ref === '') {
+                $this->send_jio_error('jio_pay_bad_ref', 'No checkout reference was given.');
+            }
+
+            $bound = $this->resolve_checkout_ref($ref);
+            if (is_wp_error($bound)) {
+                $this->send_jio_error($bound->get_error_code(), $bound->get_error_message());
+            }
+
+            // Even a legitimate shopper has no reason to look up many cards.
+            // This bounds how useful a stolen reference would be.
+            $bucket  = 'jio_pay_bin_rate_' . md5($ref);
+            $lookups = (int) get_transient($bucket);
+
+            if ($lookups >= self::BIN_LOOKUPS_PER_CHECKOUT) {
+                $this->send_jio_error('jio_pay_rate_limited', 'Too many card lookups for this checkout. Please reload and try again.');
+            }
+
+            set_transient($bucket, $lookups + 1, 10 * MINUTE_IN_SECONDS);
+
+            $card = isset($_POST['cardNo']) ? sanitize_text_field(wp_unslash($_POST['cardNo'])) : '';
+            if ($card === '') {
+                $this->send_jio_error('jio_pay_missing_field', 'No card number was given.');
+            }
+
+            $result = $this->service()->bin_details($card);
+
+            if (is_wp_error($result)) {
+                $this->send_jio_error($result->get_error_code(), $result->get_error_message());
+            }
+
+            $this->send_jio_reply($result['data'], $result['raw']);
+        } catch (\Throwable $e) {
+            error_log('Jio Pay bin_details failed: ' . $e->getMessage());
+            $this->send_jio_error('jio_pay_internal_error', 'Could not check the card type.');
         }
     }
 

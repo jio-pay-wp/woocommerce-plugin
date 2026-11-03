@@ -470,6 +470,7 @@ add_action('wp_enqueue_scripts', function () {
                 'init_checkout' => 'jio_pay_init_checkout',
                 'initiate_sale' => 'jio_pay_initiate_sale',
                 'txn_status'    => 'jio_pay_txn_status',
+                'bin_details'   => 'jio_pay_bin_details',
                 'verify'        => 'jio_pay_verify_payment',
             ],
             // No 'amount' either: a total baked in at render time is the
