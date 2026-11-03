@@ -932,7 +932,7 @@ jQuery(document).ready(function ($) {
                     merchantLogo: config.merchantLogo,
                     theme: config.theme,
                     timeOut: config.timeOut,
-                    testMode: config.testMode,
+                    env: config.testMode ? 'uat':'prod',
 
                     // Prefill only, for the popup's own fields.
                     customerEmailID: config.customerEmailID || customerData.email,
@@ -951,6 +951,9 @@ jQuery(document).ready(function ($) {
                     checkoutRef: paymentOptions.checkoutRef,
                     amount: paymentOptions.amount,
                     allowedPaymentTypes: paymentOptions.allowedPaymentTypes,
+                    // Lower case, straight from the server. The SDK
+                    // compares this with === against "uat" and "prod".
+                    env: config.env,
                     testMode: config.testMode,
                 });
 

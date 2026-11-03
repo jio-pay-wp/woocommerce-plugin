@@ -98,6 +98,7 @@ nonce=<jioPayVars.nonce>
     "amount": "554.24",
     "currency": "INR",
     "currencyCode": "356",
+    "env": "prod",
     "testMode": false,
     "merchantName": "Techiesms",
     "merchantLogo": "https://store.example.com/logo.png",
@@ -152,6 +153,7 @@ The merchant's checkout page constructs the SDK with this, and nothing more:
   merchantLogo:        "https://store.example.com/logo.png",
   theme:               "light",
   timeOut:             300,
+  env:                 "prod",
   testMode:            false,
 
   // Prefill only, for the popup's own fields.
@@ -287,6 +289,29 @@ payment failed.** The charge may have succeeded. Say the outcome is
 unconfirmed, tell them not to pay again, and call event 3.
 
 ---
+
+## A case-sensitivity trap in the current SDK
+
+`env` is sent **lower case** (`"uat"` / `"prod"`) and must be compared that
+way. The bundle validates case-insensitively:
+
+```js
+if (!d || !["uat","prod"].includes(d.toLowerCase())) return error("Invalid environment!")
+```
+
+but every branch that acts on it uses strict equality:
+
+```js
+Ve === "uat" ? "uat" : "prod"                        // base URL
+Ve === "prod" && (Le.returnURL = Qe || xt)           // returnURL only on prod
+Ve !== "prod" ? je(fn) : window.open(fn, "_blank")   // redirect style
+```
+
+So `"PROD"` passes validation and then fails every comparison: production
+URLs, but with `returnURL` unset and the non-production redirect path taken.
+`"UAT"` is worse -- it misses the `=== "uat"` branch and so sends UAT traffic
+to production URLs. Please make these comparisons case-insensitive, or
+document the requirement; the plugin sends lower case either way.
 
 ## Open items we need from Jio
 

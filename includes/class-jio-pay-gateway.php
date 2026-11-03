@@ -2043,11 +2043,18 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'amount'              => $context['amount'],
                 'currency'            => 'INR',
                 'currencyCode'        => WC_Jio_Pay_Service::CURRENCY_CODE,
-                // merchantId, aggregatorID and the environment name are not
-                // returned. The popup no longer builds Jio requests, so it has
-                // no use for them, and the merchant's identity is not the
-                // browser's business. testMode is all a popup needs to badge
-                // itself during certification.
+                // merchantId and aggregatorID are not returned: the popup no
+                // longer builds Jio requests, so it has no use for them, and
+                // the merchant's identity is not the browser's business.
+                //
+                // env IS returned, lower case. The SDK branches on strict
+                // equality against "uat" and "prod" in several places while
+                // validating case-insensitively, so a value like "PROD"
+                // passes validation and then fails every comparison -- prod
+                // URLs with the returnURL unset and the non-prod redirect
+                // path. Deriving it in the browser from testMode invites
+                // exactly that, so it is sent ready to use.
+                'env'                 => $service->get_environment(),
                 'testMode'            => $service->get_environment() !== 'prod',
                 'merchantName'        => get_bloginfo('name'),
                 'merchantLogo'        => $this->resolve_merchant_logo($options),
