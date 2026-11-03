@@ -1371,6 +1371,26 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             return;
         }
 
+        // The nonce alone was not enough here: any visitor can obtain one, so
+        // this would write a transaction id onto somebody else's order.
+        if (!$this->order_belongs_to_shopper($order)) {
+            wp_send_json_error(['message' => 'That order does not belong to this session']);
+            return;
+        }
+
+        // Never overwrite a number the server minted and has already sent to
+        // Jio. A browser-generated id landing on top of it would leave the
+        // order tagged with a reference Jio never saw, and the status query
+        // and return handler would then look up the wrong transaction.
+        if ($order->get_meta('_jio_pay_merchant_txn_no')) {
+            wp_send_json_success([
+                'message'        => 'Server-issued transaction number kept.',
+                'order_id'       => $order_id,
+                'merchant_tr_id' => $order->get_meta('_jio_pay_merchant_txn_no'),
+            ]);
+            return;
+        }
+
         // Store merchant transaction ID in order meta
         $order->update_meta_data('_jio_pay_merchant_tr_id', $merchant_tr_id);
         $order->save();

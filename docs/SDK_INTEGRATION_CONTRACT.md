@@ -107,6 +107,59 @@ Notes:
 
 ---
 
+## What the checkout page hands the SDK
+
+The merchant's checkout page constructs the SDK with this, and nothing more:
+
+```js
+{
+  // How to reach the plugin.
+  ajaxUrl:  "https://store.example.com/wp-admin/admin-ajax.php",
+  nonce:    "a1b2c3d4e5",
+  endpoints: { init_checkout, initiate_sale, txn_status, ... },
+
+  // Issued by event 1; replay it on every later call.
+  checkoutRef: "JPC7F3K9QX2M8VB4NDJW6HLP",
+
+  // Already authoritative, straight from event 1. Provided so the SDK need
+  // not call init_checkout again -- though calling it again with this
+  // checkoutRef is safe and returns the same reference.
+  amount:              "554.24",
+  currency:            "INR",
+  allowedPaymentTypes: ["NB", "UPI_QR", "CREDIT_CARD", "DEBIT_CARD"],
+  merchantName:        "Techiesms",
+  merchantLogo:        "https://store.example.com/logo.png",
+  theme:               "light",
+  timeOut:             300,
+  testMode:            false,
+
+  // Prefill only, for the popup's own fields.
+  customerEmailID: "shopper@example.com",
+  email:           "shopper@example.com",
+  userName:        "Jane Doe",
+
+  onSuccess, onFailure, onClose
+}
+```
+
+### What is no longer passed, and must not be required
+
+| Was passed | Now |
+|------------|-----|
+| `secretKey` | Gone. Signing is server side. |
+| `merchantId`, `aggId`, `mcc_code`, `env` | Gone. The server supplies its own identifiers when it builds the payload. Not on the page at all. |
+| `merchantTrId` | Gone. **The SDK must not generate a transaction number.** The server mints it at event 2 and returns it as `merchantTxnNo`. A browser-generated id used to be POSTed back and would overwrite the number the server had sent to Jio, leaving the order tagged with a reference Jio never saw. |
+| `returnURL` | Gone. The plugin sets its own handler. |
+
+### What the SDK must return in its callbacks
+
+Echo `merchantTxnNo` (from the event 2 response) back in the `onSuccess` and
+`onFailure` result objects, alongside Jio's own fields (`txnAuthID`,
+`txnResponseCode`, `txnRespDescription`, `secureHash`, `amount`,
+`txnDateTime`). The plugin matches the result to the order by that number.
+
+---
+
 ## Event 2 — shopper selects a payment option
 
 One call for every payment type. We route internally — UPI QR goes to Jio's
