@@ -23,6 +23,22 @@ Jio; we hand back Jio's response unchanged.
 
 **`secretKey` is no longer provided to the SDK and must not be required.**
 
+## Who calls what
+
+Of the actions published on the page, the SDK implements **one** (plus one
+optional). The rest are the plugin's own business.
+
+| Action | Called by | SDK must implement |
+|--------|-----------|--------------------|
+| `jio_pay_init_checkout` | The merchant's checkout page, before the SDK is constructed | no |
+| `jio_pay_initiate_sale` | **The SDK**, when the shopper picks a payment option | **yes** |
+| `jio_pay_txn_status` | The SDK, for reconciliation or an unclear outcome | optional |
+| `jio_pay_verify_payment` | The plugin, from inside its own `onSuccess` / `onFailure` handler | no |
+
+`verify_payment` is worth calling out: the SDK *triggers* it by firing
+`onSuccess`, but the plugin makes the call. Nothing for Jio to build there
+beyond returning `merchantTxnNo` in the callback result.
+
 ## Transport
 
 All calls are `POST`, `application/x-www-form-urlencoded`, to the WordPress
@@ -38,10 +54,15 @@ The exact URL and the action names are published on the checkout page as
 ```js
 jioPayVars.ajax_url              // "https://store.example.com/wp-admin/admin-ajax.php"
 jioPayVars.nonce                 // send as `nonce`
-jioPayVars.endpoints.init_checkout   // "jio_pay_init_checkout"
-jioPayVars.endpoints.initiate_sale   // "jio_pay_initiate_sale"
+jioPayVars.endpoints.init_checkout   // "jio_pay_init_checkout"  (page, not SDK)
+jioPayVars.endpoints.initiate_sale   // "jio_pay_initiate_sale"  <- the SDK's call
 jioPayVars.endpoints.txn_status      // "jio_pay_txn_status"
+jioPayVars.endpoints.verify          // "jio_pay_verify_payment" (plugin, not SDK)
 ```
+
+There is one HTTP endpoint, not four. WordPress routes every AJAX call
+through `admin-ajax.php`; the `action` field selects the handler. So the URL
+is the same for all of these and only `action` changes.
 
 Read them from there rather than hard-coding — the names are stable but the
 host is not. Send cookies (`credentials: 'same-origin'`); the shopper's

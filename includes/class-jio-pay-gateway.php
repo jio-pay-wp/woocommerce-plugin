@@ -2201,6 +2201,16 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
             }
 
+            // Same enablement check initiate_sale makes. This endpoint is
+            // reachable directly, so without it UPI QR could be obtained
+            // from a store that has switched UPI QR off.
+            if (!in_array('UPI_QR', $this->resolve_payment_types(get_option('woocommerce_jio_pay_settings', [])), true)) {
+                $this->send_json_error([
+                    'message' => 'That payment method is not available on this store.',
+                    'code'    => 'jio_pay_payment_type_disabled',
+                ]);
+            }
+
             $merchant_txn_no = WC_Jio_Pay_Service::generate_merchant_txn_no();
             $service         = $this->service();
 

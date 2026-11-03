@@ -419,11 +419,13 @@ add_action('wp_enqueue_scripts', function () {
             // WC_Jio_Pay_Service, server side. The SDK calls these endpoints
             // instead of signing for itself.
             'endpoints' => [
+                // Only what the contract actually uses. generate_qr and
+                // get_payment_amount were advertised here but read by
+                // nobody: initiate_sale routes UPI QR itself, and
+                // init_checkout replaced the separate amount lookup.
                 'init_checkout' => 'jio_pay_init_checkout',
                 'initiate_sale' => 'jio_pay_initiate_sale',
-                'generate_qr'   => 'jio_pay_generate_qr',
                 'txn_status'    => 'jio_pay_txn_status',
-                'amount'        => 'jio_pay_get_payment_amount',
                 'verify'        => 'jio_pay_verify_payment',
             ],
             // No 'amount' either: a total baked in at render time is the

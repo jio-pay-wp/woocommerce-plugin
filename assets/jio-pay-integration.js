@@ -912,8 +912,7 @@ jQuery(document).ready(function ($) {
                 // overwrite the number the server had sent to Jio -- leaving
                 // the order tagged with a reference Jio never saw.
                 const paymentOptions = {
-                    // How to reach the plugin. Everything else follows from
-                    // these three.
+                    
                     ajaxUrl: jioPayVars.ajax_url,
                     nonce: jioPayVars.nonce,
                     endpoints: jioPayVars.endpoints,
@@ -946,9 +945,13 @@ jQuery(document).ready(function ($) {
                 };
 
                 console.log('Jio Pay init (no credentials, no secret):', {
+                    ajaxUrl : jioPayVars.ajax_url,
+                    endpoints : jioPayVars.endpoints,
+                    nonce : jioPayVars.nonce,
                     checkoutRef: paymentOptions.checkoutRef,
                     amount: paymentOptions.amount,
-                    allowedPaymentTypes: paymentOptions.allowedPaymentTypes
+                    allowedPaymentTypes: paymentOptions.allowedPaymentTypes,
+                    testMode: config.testMode,
                 });
 
                 const jioPay = new jioPaySDK(paymentOptions);
@@ -1265,7 +1268,7 @@ jQuery(document).ready(function ($) {
 
         // Call verify_payment endpoint
         $.post(jioPayVars.ajax_url, {
-            action: 'jio_pay_verify_payment',
+            action: jioPayVars.endpoints.verify,
             nonce: jioPayVars.nonce,
             order_id: window.currentOrderId || 0,
             payment_data: {
