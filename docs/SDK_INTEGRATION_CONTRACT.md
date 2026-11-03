@@ -341,22 +341,26 @@ body.data.response.tranCtx
 body.data.code                      // on failure, e.g. "jio_pay_expired_ref"
 ```
 
-So a check written against the old direct-to-Jio flow needs one extra hop:
+Jio's fields are **also copied to the top level**, so a check written against
+the old direct-to-Jio flow keeps working unchanged:
 
 ```js
-// before (talking to Jio directly)
-if (res?.responseCode === "R1000") { … }
-
-// now
-if (body?.data?.response?.responseCode === "R1000") { … }
+body.responseCode === "R1000"                  // works
+body.data.response.responseCode === "R1000"    // also works
+body.txnResponseCode === "0000"                // status, works
 ```
 
-Same for status: `body.data.response.txnResponseCode`, not
-`body.txnResponseCode`.
+Both are supported deliberately. The top-level copy means no SDK release has
+to reach a level deeper than it does today; the nested copy is the canonical
+one and is what new code should read.
 
-The nesting is deliberate. Jio's reply is passed through untouched, so
-flattening it into the envelope would let a field named `success` or `data`
-in a future Jio response silently corrupt the envelope.
+The envelope's own keys, `success` and `data`, are never overwritten by the
+copy. If a future Jio response contains a field with either name it is
+dropped from the top level and remains reachable at `data.response`, so it
+cannot corrupt the envelope.
+
+Error replies carry no Jio fields at all -- there is no Jio response to copy
+-- so an error is always `{"success": false, "data": {"message", "code"}}`.
 
 ## Polling `txn_status`
 

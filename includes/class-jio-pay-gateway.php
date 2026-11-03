@@ -1768,6 +1768,40 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      * ------------------------------------------------------------------- */
 
     /**
+     * Reply with the envelope, and with Jio's own fields at the top level.
+     *
+     * Jio has specified that initiateSale answers with a flat object --
+     * responseCode, redirectURI, tranCtx, txnAuthID, merchantTxnNo -- and
+     * their SDK reads those straight off the response body, because that is
+     * the shape it saw when it called Jio directly.
+     *
+     * Rather than make every SDK release reach one level deeper, Jio's reply
+     * is copied to the top level as well as staying under data.response. The
+     * envelope keys are never overwritten, so a future Jio field called
+     * success or data cannot corrupt the response; it stays reachable at
+     * data.response where the contract puts it.
+     *
+     * @param array      $payload Envelope payload, served as data.
+     * @param array|null $jio     Jio's parsed reply.
+     */
+    private function send_json_passthrough(array $payload, $jio)
+    {
+        $body = ['success' => true, 'data' => $payload];
+
+        if (is_array($jio)) {
+            foreach ($jio as $key => $value) {
+                if ($key === 'success' || $key === 'data') {
+                    continue;
+                }
+                $body[$key] = $value;
+            }
+        }
+
+        $this->discard_buffered_output();
+        wp_send_json($body);
+    }
+
+    /**
      * Build the API service from stored settings.
      */
     private function service()
@@ -2150,14 +2184,14 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
                 $this->remember_txn_no($context['order'], $merchant_txn_no);
 
-                $this->send_json_success([
+                $this->send_json_passthrough([
                     'paymentType'   => $requested,
                     'merchantTxnNo' => $merchant_txn_no,
                     'amount'        => $context['amount'],
                     'http_code'     => $qr['http_code'],
                     'response'      => $qr['data'],
                     'raw'           => $qr['data'] === null ? $qr['raw'] : null,
-                ]);
+                ], $qr['data']);
             }
 
             $mode = $resolved['mode'];
@@ -2190,14 +2224,14 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
             $this->remember_txn_no($context['order'], $merchant_txn_no);
 
-            $this->send_json_success([
+            $this->send_json_passthrough([
                 'paymentType'   => $requested,
                 'merchantTxnNo' => $merchant_txn_no,
                 'amount'        => $context['amount'],
                 'http_code'     => $result['http_code'],
                 'response'      => $result['data'],
                 'raw'           => $result['data'] === null ? $result['raw'] : null,
-            ]);
+            ], $result['data']);
         } catch (\Throwable $e) {
             error_log('Jio Pay initiate_sale failed: ' . $e->getMessage());
             $this->send_json_error(['message' => 'Could not start the payment. Please try again.', 'code' => 'jio_pay_internal_error']);
@@ -2307,7 +2341,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             $cached    = get_transient($cache_key);
 
             if (is_array($cached)) {
-                $this->send_json_success($cached + ['cached' => true]);
+                $this->send_json_passthrough($cached + ['cached' => true], $cached['response'] ?? null);
             }
 
             $result = $this->service()->check_status($merchant_txn_no);
@@ -2325,7 +2359,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
 
             set_transient($cache_key, $payload, 5);
 
-            $this->send_json_success($payload);
+            $this->send_json_passthrough($payload, $result['data']);
         } catch (\Throwable $e) {
             error_log('Jio Pay txn_status failed: ' . $e->getMessage());
             $this->send_json_error(['message' => 'Could not check the payment status.', 'code' => 'jio_pay_internal_error']);
