@@ -40,34 +40,55 @@ window.JioPayApi = (function () {
         });
     }
 
+    // Held between the two events: issued by initCheckout, replayed on
+    // every later call so the server knows which checkout this is.
+    var checkoutRef = '';
+
+    function identity() {
+        return checkoutRef
+            ? { checkout_ref: checkoutRef }
+            : { order_id: window.currentOrderId || 0, order_key: window.currentOrderKey || '' };
+    }
+
     return {
         /**
-         * Start a netbanking or card sale.
-         * @param {string} mode 'NB', 'CC' or 'DC'.
-         * @param {object} details Card fields, for CC/DC only.
+         * Event 1 -- the shopper picked Jio Pay.
+         *
+         * Returns everything the popup needs to render its payment options,
+         * and the checkoutRef that identifies this checkout from here on.
          */
-        initiateSale: function (mode, details) {
-            return post(jioPayVars.endpoints.initiate_sale, Object.assign({
-                mode: mode,
+        initCheckout: function () {
+            return post(jioPayVars.endpoints.init_checkout, {
                 order_id: window.currentOrderId || 0,
                 order_key: window.currentOrderKey || ''
-            }, details || {}));
-        },
-
-        /** Generate a UPI QR for the current order. */
-        generateQr: function () {
-            return post(jioPayVars.endpoints.generate_qr, {
-                order_id: window.currentOrderId || 0,
-                order_key: window.currentOrderKey || ''
+            }).then(function (config) {
+                checkoutRef = config.checkoutRef;
+                return config;
             });
         },
 
-        /** Ask Jio what happened to this order's transaction. */
+        /**
+         * Event 2 -- the shopper picked a payment option in the popup.
+         *
+         * @param {string} paymentType The code the popup displayed, e.g.
+         *        'NB', 'UPI_QR', 'CREDIT_CARD', 'DEBIT_CARD'.
+         * @param {object} [details] Card fields, for the card types only.
+         */
+        initiate: function (paymentType, details) {
+            return post(
+                jioPayVars.endpoints.initiate_sale,
+                Object.assign({ payment_type: paymentType }, identity(), details || {})
+            );
+        },
+
+        /** Ask Jio what happened to this checkout's transaction. */
         checkStatus: function () {
-            return post(jioPayVars.endpoints.txn_status, {
-                order_id: window.currentOrderId || 0,
-                order_key: window.currentOrderKey || ''
-            });
+            return post(jioPayVars.endpoints.txn_status, identity());
+        },
+
+        /** The current reference, if a checkout has been opened. */
+        getCheckoutRef: function () {
+            return checkoutRef;
         }
     };
 })();

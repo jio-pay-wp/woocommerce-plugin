@@ -103,17 +103,29 @@ Exposed as `admin-ajax.php` actions, names published in `jioPayVars.endpoints`:
 
 | Action | Purpose |
 |--------|---------|
-| `jio_pay_initiate_sale` | Start an NB/CC/DC sale |
-| `jio_pay_generate_qr`   | Generate a UPI QR |
+| `jio_pay_init_checkout` | Open a checkout; returns `checkoutRef` + popup config |
+| `jio_pay_initiate_sale` | Start a payment, any type; routes NB/CC/DC to initiateSale and UPI_QR to generateQR |
+| `jio_pay_generate_qr`   | Generate a UPI QR directly (initiate_sale routes here for UPI_QR) |
 | `jio_pay_txn_status`    | Query a transaction's status |
+
+The browser-facing contract, including payloads and error codes, is in
+`SDK_INTEGRATION_CONTRACT.md`.
 
 Use the `window.JioPayApi` client in `assets/jio-pay-integration.js`:
 
 ```js
-JioPayApi.initiateSale('NB').then(r => /* r.response, r.merchantTxnNo */);
-JioPayApi.generateQr().then(r => /* r.response */);
+// Event 1: shopper picked Jio Pay. Returns the popup config + checkoutRef.
+JioPayApi.initCheckout().then(config => /* config.allowedPaymentTypes, config.amount */);
+
+// Event 2: shopper picked an option in the popup.
+JioPayApi.initiate('NB').then(r => /* r.response, r.merchantTxnNo */);
+JioPayApi.initiate('CREDIT_CARD', { cardNo, cvv, cardExpiry, nameOnCard });
+
+// Optional: confirm an unclear outcome.
 JioPayApi.checkStatus().then(r => /* r.response */);
 ```
+
+The `checkoutRef` is held inside the client and replayed automatically.
 
 ### What the browser is not allowed to decide
 
@@ -138,11 +150,11 @@ JioPayApi.checkStatus().then(r => /* r.response */);
 
 1. **Rotate the live secret.** It was public in page source on every
    checkout. Rotation only helps once 1.4.0 is deployed.
-2. **The shipped SDK bundle cannot use these endpoints.** It has no hook for
-   externally-supplied signing — grep found one `baseUrl` and no
-   `onSign`/`signUrl` equivalent — so it still expects `secretKey` and builds
-   its own requests. A build that delegates signing is needed from Jio, or the
-   popup UI has to be driven by plugin code against `JioPayApi`.
+2. **Jio's SDK team must point the SDK at these endpoints.** The shipped
+   bundle still signs locally and expects `secretKey`, which is no longer
+   provided. The contract to hand them is `docs/SDK_INTEGRATION_CONTRACT.md`:
+   two events, two calls, no SDK-side signing. Until they ship that build the
+   popup will not complete a payment.
 3. **Card modes put this server in PCI DSS scope.** `CC`/`DC` route the PAN
    and CVV through WordPress. That moves the store from SAQ-A to SAQ-D. Ask
    Jio for hosted card capture or tokenisation so card data never touches the

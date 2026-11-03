@@ -242,6 +242,58 @@ class WC_Jio_Pay_Service
     }
 
     /**
+     * Map the payment-type codes the popup displays to an internal route.
+     *
+     * The admin screen and the SDK both speak in CREDIT_CARD / DEBIT_CARD /
+     * UPI_QR; initiateSale speaks in CC / DC and QR is a different endpoint
+     * altogether. The SDK sends back whichever code it displayed, so the
+     * translation belongs here rather than in the SDK team's integration.
+     *
+     * @param string $code Code as sent by the popup.
+     * @return array{route: string, mode: string}|WP_Error
+     */
+    public static function resolve_payment_type($code)
+    {
+        $map = [
+            'NB'          => ['route' => 'sale', 'mode' => 'NB'],
+            'NETBANKING'  => ['route' => 'sale', 'mode' => 'NB'],
+            'CREDIT_CARD' => ['route' => 'sale', 'mode' => 'CC'],
+            'CC'          => ['route' => 'sale', 'mode' => 'CC'],
+            'DEBIT_CARD'  => ['route' => 'sale', 'mode' => 'DC'],
+            'DC'          => ['route' => 'sale', 'mode' => 'DC'],
+            'UPI_QR'      => ['route' => 'qr',   'mode' => 'UPI_QR'],
+            'UPIQR'       => ['route' => 'qr',   'mode' => 'UPI_QR'],
+        ];
+
+        $code = strtoupper(trim((string) $code));
+
+        if (isset($map[$code])) {
+            return $map[$code];
+        }
+
+        // UPI_VPA and UPI_INTENT land here on purpose: Jio has not documented
+        // their initiateSale fields, and a guessed payload would hash to
+        // something their validator rejects. Fail loudly instead.
+        return new WP_Error(
+            'jio_pay_unsupported_payment_type',
+            sprintf('Payment type "%s" is not supported server side yet.', $code)
+        );
+    }
+
+    /**
+     * The payment-type codes this plugin can actually process.
+     *
+     * Used to filter the configured list before the popup renders it, so a
+     * shopper is never offered a method that will fail at initiate.
+     *
+     * @return string[]
+     */
+    public static function supported_payment_types()
+    {
+        return ['NB', 'UPI_QR', 'CREDIT_CARD', 'DEBIT_CARD'];
+    }
+
+    /**
      * Build a signed initiateSale payload.
      *
      * Amount, merchantTxnNo and returnURL are supplied by the caller because

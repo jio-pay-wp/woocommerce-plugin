@@ -1,0 +1,242 @@
+# Jio Pay SDK → plugin integration contract
+
+**For: the Jio Pay SDK team.** This is everything the SDK needs in order to
+stop holding the merchant secret. Two events, two calls. The plugin does all
+signing and all talking to Jio.
+
+## Why this change
+
+The current SDK computes `secureHash` in the browser:
+
+```js
+HmacSHA256(sortedPayloadValues, secretKey)
+```
+
+That requires the merchant secret to be present in JavaScript, so it appears
+in checkout page source on every page load. Our merchants' live keys are
+publicly readable, and `secureHash` stops proving anything — any visitor can
+compute a valid one.
+
+From plugin v1.4.0 the secret stays on the merchant's server. The SDK no
+longer signs, and no longer calls Jio directly. It calls us; we sign and call
+Jio; we hand back Jio's response unchanged.
+
+**`secretKey` is no longer provided to the SDK and must not be required.**
+
+## Transport
+
+All calls are `POST`, `application/x-www-form-urlencoded`, to the WordPress
+AJAX endpoint on the merchant's own origin:
+
+```
+POST /wp-admin/admin-ajax.php
+```
+
+The exact URL and the action names are published on the checkout page as
+`window.jioPayVars`:
+
+```js
+jioPayVars.ajax_url              // "https://store.example.com/wp-admin/admin-ajax.php"
+jioPayVars.nonce                 // send as `nonce`
+jioPayVars.endpoints.init_checkout   // "jio_pay_init_checkout"
+jioPayVars.endpoints.initiate_sale   // "jio_pay_initiate_sale"
+jioPayVars.endpoints.txn_status      // "jio_pay_txn_status"
+```
+
+Read them from there rather than hard-coding — the names are stable but the
+host is not. Send cookies (`credentials: 'same-origin'`); the shopper's
+session is how we authorise the call.
+
+Every reply is WordPress's standard AJAX envelope:
+
+```json
+{ "success": true,  "data": { ... } }
+{ "success": false, "data": { "message": "...", "code": "..." } }
+```
+
+---
+
+## Event 1 — shopper selects Jio Pay
+
+Call this when Jio Pay is chosen, **before** opening the popup. It returns the
+`checkoutRef` that identifies this checkout for the rest of the flow, plus
+everything needed to render the payment options.
+
+```
+action=jio_pay_init_checkout
+nonce=<jioPayVars.nonce>
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "checkoutRef": "JPC7F3K9QX2M8VB4NDJW6HLP",
+    "amount": "554.24",
+    "currency": "INR",
+    "currencyCode": "356",
+    "env": "prod",
+    "merchantId": "JP2001000011459",
+    "aggId": "JP2000000000001",
+    "merchantName": "Techiesms",
+    "merchantLogo": "https://store.example.com/logo.png",
+    "allowedPaymentTypes": ["NB", "UPI_QR", "CREDIT_CARD", "DEBIT_CARD"],
+    "theme": "light",
+    "timeOut": 300,
+    "customerEmailID": "shopper@example.com",
+    "userName": "Jane Doe"
+  }
+}
+```
+
+Notes:
+
+- **Render only `allowedPaymentTypes`.** It is already filtered to what the
+  merchant enabled *and* what the server can process. Do not show anything
+  else — it will be rejected at event 2.
+- `amount` is authoritative and is recomputed on every call. Display it, but
+  do not send it back; see "What the SDK must not send".
+- `timeOut` is in **seconds**.
+- Keep `checkoutRef` for the rest of the session. It is unguessable and bound
+  to the shopper's session, so it cannot be reused from another browser.
+
+---
+
+## Event 2 — shopper selects a payment option
+
+One call for every payment type. We route internally — UPI QR goes to Jio's
+`generateQR`, the rest to `initiateSale`. The SDK does not need to know which.
+
+```
+action=jio_pay_initiate_sale
+nonce=<jioPayVars.nonce>
+checkout_ref=JPC7F3K9QX2M8VB4NDJW6HLP
+payment_type=NB
+```
+
+`payment_type` is the code as displayed — send back exactly what came in
+`allowedPaymentTypes`:
+
+| `payment_type` | Routed to | Extra fields required |
+|----------------|-----------|-----------------------|
+| `NB`           | `initiateSale` (`paymentMode=NB`, `payType=0`) | — |
+| `UPI_QR`       | `generateQR` (`requestType=UPIQR`) | — |
+| `CREDIT_CARD`  | `initiateSale` (`paymentMode=CARD`, `paymentOptionCodes=CC`, `payType=1`) | card fields below |
+| `DEBIT_CARD`   | `initiateSale` (`paymentMode=CARD`, `paymentOptionCodes=DC`, `payType=1`) | card fields below |
+
+For the two card types, add:
+
+```
+cardNo=4280912015088213
+cvv=123
+cardExpiry=203207
+nameOnCard=John Doe
+```
+
+`cardExpiry` is `YYYYMM`. Card fields are passed straight to Jio; they are
+never stored, and the server log keeps only the last four digits of the PAN.
+
+### Response
+
+```json
+{
+  "success": true,
+  "data": {
+    "paymentType": "NB",
+    "merchantTxnNo": "8441342264",
+    "amount": "554.24",
+    "http_code": 200,
+    "response": { "...": "Jio's reply, verbatim" }
+  }
+}
+```
+
+`response` is Jio's own JSON, unmodified — handle it exactly as the SDK
+handles a direct reply today. If Jio returns something unparseable, `response`
+is `null` and the body arrives as `raw` instead.
+
+`merchantTxnNo` is minted by us and already recorded against the order, so it
+needs no echo.
+
+---
+
+## Event 3 (optional) — confirm status
+
+For reconciliation, or after a timeout where the outcome is unclear.
+
+```
+action=jio_pay_txn_status
+nonce=<jioPayVars.nonce>
+checkout_ref=JPC7F3K9QX2M8VB4NDJW6HLP
+```
+
+Returns Jio's `STATUS` reply under `response`. The transaction number is read
+from the order rather than the request, so this cannot be used to look up
+another shopper's transaction.
+
+---
+
+## What the SDK must not send
+
+These are deliberately ignored if present. They are decided server side, and
+accepting them from the browser is what made the old flow unsafe:
+
+| Field | Why |
+|-------|-----|
+| `secretKey` | Never leaves the server. Signing happens in PHP. |
+| `secureHash` | Computed server side over the final payload. |
+| `amount` | Read from the order. A tampered amount cannot change the charge, and this also fixes a real bug where a shipping change left the popup showing a stale total. |
+| `merchantTxnNo` | Minted server side so a status reply can be trusted. |
+| `returnURL` | Set to the plugin's own handler. |
+| `txnDate`, `currencyCode`, `aggregatorID`, `merchantId` | Server side, from stored settings. |
+
+## Errors
+
+`success: false` with a `code`:
+
+| Code | Meaning | SDK should |
+|------|---------|------------|
+| `jio_pay_expired_ref` | `checkoutRef` expired (2h TTL) | Close, ask shopper to reload |
+| `jio_pay_ref_not_yours` | Reference does not match session | Close; do not retry |
+| `jio_pay_unsupported_payment_type` | Type not supported server side | Should not happen if `allowedPaymentTypes` is respected |
+| `jio_pay_missing_field` | A required card field is absent | Re-prompt |
+| `jio_pay_bad_amount` | Cart/order priced at zero or less | Close |
+| `jio_pay_not_configured` | Merchant has no credentials saved | Close |
+
+**On a transport failure or an unparseable reply, do not tell the shopper the
+payment failed.** The charge may have succeeded. Say the outcome is
+unconfirmed, tell them not to pay again, and call event 3.
+
+---
+
+## Open items we need from Jio
+
+1. **`UPI_VPA` and `UPI_INTENT` are not implemented.** Your integration note
+   documents NB, CARD, generateQR and STATUS only. We will not guess field
+   names, because a wrong payload hashes to a `secureHash` your validator
+   rejects. Please send the `initiateSale` field list for both and we will add
+   them.
+2. **`generateQR` currency.** Your sample uses `currency=365`, while
+   `initiateSale` uses `currencyCode=356`. 365 is not INR in ISO 4217. Which
+   is correct? We currently send 365 for QR as documented.
+3. **Endpoint paths.** UAT carries `/tsp/` throughout; production drops it for
+   `initiateSale` and `generateQR` but appears to keep it for `/command`.
+   Please confirm all three production URLs.
+4. **Is `STATUS` signed?** Your sample `STATUS` call carries no `secureHash`
+   and our production refunds have worked without one. Confirm, so we can turn
+   signing on if needed.
+5. **Card data and PCI scope.** Routing `cardNo`/`cvv` through the merchant's
+   WordPress server puts every store in PCI DSS scope (SAQ-A to SAQ-D). This
+   is unavoidable while `secureHash` covers the card fields. Can you offer
+   hosted card capture or tokenisation, so card data goes browser-to-Jio and
+   never touches the merchant server? NB and UPI QR carry no cardholder data
+   and are unaffected.
+
+## Reference
+
+Signing recipe, verified byte-identical to your Postman pre-request script and
+to the SDK's `Cv()`: drop `secureHash`, sort keys alphabetically, concatenate
+the values only, hex HMAC-SHA256 keyed by the secret. Implemented in
+`includes/class-jio-pay-service.php`.

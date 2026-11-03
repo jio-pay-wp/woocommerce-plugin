@@ -425,6 +425,7 @@ add_action('wp_enqueue_scripts', function () {
             // WC_Jio_Pay_Service, server side. The SDK calls these endpoints
             // instead of signing for itself.
             'endpoints' => [
+                'init_checkout' => 'jio_pay_init_checkout',
                 'initiate_sale' => 'jio_pay_initiate_sale',
                 'generate_qr'   => 'jio_pay_generate_qr',
                 'txn_status'    => 'jio_pay_txn_status',

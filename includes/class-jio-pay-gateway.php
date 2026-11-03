@@ -100,6 +100,8 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         // stays in the database: the browser asks for a payment to be
         // started and we sign and send it, rather than handing the secret
         // out and letting the browser sign for itself.
+        add_action('wp_ajax_jio_pay_init_checkout', [$this, 'ajax_init_checkout']);
+        add_action('wp_ajax_nopriv_jio_pay_init_checkout', [$this, 'ajax_init_checkout']);
         add_action('wp_ajax_jio_pay_initiate_sale', [$this, 'ajax_initiate_sale']);
         add_action('wp_ajax_nopriv_jio_pay_initiate_sale', [$this, 'ajax_initiate_sale']);
         add_action('wp_ajax_jio_pay_generate_qr', [$this, 'ajax_generate_qr']);
@@ -1758,16 +1760,114 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     }
 
     /**
-     * Resolve the order the browser claims to be paying for, and its total.
+     * Mint a checkout reference -- the "unique_number" the popup carries.
      *
-     * The amount is read from the order here rather than accepted from the
-     * request. That is the point of the endpoint: a tampered amount in the
-     * POST cannot change what Jio is asked to charge.
+     * The reference, not the order id, is what the SDK hands back on every
+     * later call. It is unguessable and bound to this shopper's session, so
+     * it cannot be lifted from one browser and replayed in another. What it
+     * does NOT carry is the amount: that is re-read from the order on every
+     * call, so a total that changes between opening the popup and paying is
+     * picked up rather than frozen (the 1.3.5 bug).
      *
-     * @return array{order: WC_Order|null, amount: string}|WP_Error
+     * @param WC_Order|null $order
+     * @return string
+     */
+    private function issue_checkout_ref($order)
+    {
+        $ref = 'JPC' . strtoupper(wp_generate_password(24, false, false));
+
+        set_transient('jio_pay_ref_' . $ref, [
+            'order_id'    => $order ? $order->get_id() : 0,
+            'customer_id' => get_current_user_id(),
+            'session_key' => WC()->session ? WC()->session->get_customer_id() : '',
+            'created'     => time(),
+        ], 2 * HOUR_IN_SECONDS);
+
+        return $ref;
+    }
+
+    /**
+     * Resolve a checkout reference back to its owner, refusing replays.
+     *
+     * @param string $ref
+     * @return array|WP_Error
+     */
+    private function resolve_checkout_ref($ref)
+    {
+        $ref = preg_replace('/[^A-Za-z0-9]/', '', (string) $ref);
+
+        if ($ref === '') {
+            return new WP_Error('jio_pay_bad_ref', 'No checkout reference was given.');
+        }
+
+        $data = get_transient('jio_pay_ref_' . $ref);
+
+        if (!is_array($data)) {
+            return new WP_Error('jio_pay_expired_ref', 'This checkout has expired. Please reload and try again.');
+        }
+
+        $customer_id = get_current_user_id();
+
+        // A reference issued to a logged-in shopper is only valid for them.
+        if (!empty($data['customer_id']) && (int) $data['customer_id'] !== (int) $customer_id) {
+            return new WP_Error('jio_pay_ref_not_yours', 'This checkout does not belong to this session.');
+        }
+
+        // A guest reference is tied to the WooCommerce session cookie.
+        if (empty($data['customer_id']) && !empty($data['session_key']) && WC()->session) {
+            if (!hash_equals((string) $data['session_key'], (string) WC()->session->get_customer_id())) {
+                return new WP_Error('jio_pay_ref_not_yours', 'This checkout does not belong to this session.');
+            }
+        }
+
+        return $data;
+    }
+
+    /**
+     * Resolve what is being paid for, and its current total.
+     *
+     * Accepts either the checkout reference the SDK was given, or an order
+     * id plus proof of ownership. The amount is always read from the order
+     * (or a freshly recalculated cart) rather than accepted from the
+     * request: a tampered amount in the POST cannot change what Jio is asked
+     * to charge.
+     *
+     * @return array{order: WC_Order|null, amount: string, ref: string}|WP_Error
      */
     private function resolve_payment_context()
     {
+        $ref = isset($_POST['checkout_ref']) ? sanitize_text_field(wp_unslash($_POST['checkout_ref'])) : '';
+
+        if ($ref !== '') {
+            $bound = $this->resolve_checkout_ref($ref);
+
+            if (is_wp_error($bound)) {
+                return $bound;
+            }
+
+            $order = !empty($bound['order_id']) ? wc_get_order($bound['order_id']) : null;
+
+            if ($order) {
+                return [
+                    'order'  => $order,
+                    'amount' => wc_format_decimal($order->get_total(), 2),
+                    'ref'    => $ref,
+                ];
+            }
+
+            if (WC()->cart) {
+                WC()->cart->calculate_totals();
+
+                return [
+                    'order'  => null,
+                    'amount' => wc_format_decimal(WC()->cart->get_total(''), 2),
+                    'ref'    => $ref,
+                ];
+            }
+
+            return new WP_Error('jio_pay_nothing_to_charge', 'No order or cart is available to price.');
+        }
+
         $order_id = intval($_POST['order_id'] ?? 0);
 
         if ($order_id) {
@@ -1784,6 +1884,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             return [
                 'order'  => $order,
                 'amount' => wc_format_decimal($order->get_total(), 2),
+                'ref'    => '',
             ];
         }
 
@@ -1794,6 +1895,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             return [
                 'order'  => null,
                 'amount' => wc_format_decimal(WC()->cart->get_total(''), 2),
+                'ref'    => '',
             ];
         }
 
@@ -1838,6 +1940,111 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     }
 
     /**
+     * The merchant logo to show in the popup.
+     */
+    private function resolve_merchant_logo($options)
+    {
+        if (!empty($options['merchant_logo'])) {
+            return $options['merchant_logo'];
+        }
+
+        $custom_logo_id = get_theme_mod('custom_logo');
+        if ($custom_logo_id) {
+            $logo = wp_get_attachment_image_src($custom_logo_id, 'full');
+            if ($logo && isset($logo[0])) {
+                return $logo[0];
+            }
+        }
+
+        $icon = get_site_icon_url();
+
+        return $icon ? $icon : '';
+    }
+
+    /**
+     * The payment types to offer, as configured and as actually supported.
+     *
+     * A method the server cannot process is dropped here rather than shown
+     * and then failed at initiate.
+     */
+    private function resolve_payment_types($options)
+    {
+        $configured = $options['allowed_payment_types'] ?? '';
+
+        if (!is_array($configured)) {
+            $configured = $configured === '' || $configured === 'all'
+                ? WC_Jio_Pay_Service::supported_payment_types()
+                : array_map('trim', explode(',', (string) $configured));
+        }
+
+        $types = array_values(array_intersect(
+            array_map('strtoupper', $configured),
+            WC_Jio_Pay_Service::supported_payment_types()
+        ));
+
+        return $types ?: ['NB'];
+    }
+
+    /**
+     * AJAX: open a Jio checkout.
+     *
+     * Called when the shopper picks Jio Pay. Returns the reference the popup
+     * carries for the rest of the flow, plus everything the popup needs to
+     * render its payment options. No credentials are in the reply beyond the
+     * merchant and aggregator ids, which are not secrets.
+     */
+    public function ajax_init_checkout()
+    {
+        $this->start_output_capture();
+        ini_set('display_errors', 0);
+
+        try {
+            $context = $this->resolve_payment_context();
+            if (is_wp_error($context)) {
+                $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
+            }
+
+            $service = $this->service();
+            if (!$service->is_configured()) {
+                $this->send_json_error(['message' => 'Jio Pay is not configured.', 'code' => 'jio_pay_not_configured']);
+            }
+
+            $options = get_option('woocommerce_jio_pay_settings', []);
+
+            // Reuse the reference if the popup is being reopened, so one
+            // checkout does not accumulate references.
+            $ref = $context['ref'] !== '' ? $context['ref'] : $this->issue_checkout_ref($context['order']);
+
+            $order = $context['order'];
+            $user  = wp_get_current_user();
+
+            $this->send_json_success([
+                'checkoutRef'         => $ref,
+                'amount'              => $context['amount'],
+                'currency'            => 'INR',
+                'currencyCode'        => WC_Jio_Pay_Service::CURRENCY_CODE,
+                'env'                 => $service->get_environment(),
+                'merchantId'          => $service->get_merchant_id(),
+                'aggId'               => $options[($service->get_environment() === 'prod' ? 'live' : 'uat') . '_agregator_id'] ?? '',
+                'merchantName'        => get_bloginfo('name'),
+                'merchantLogo'        => $this->resolve_merchant_logo($options),
+                'allowedPaymentTypes' => $this->resolve_payment_types($options),
+                'theme'               => $options['theme'] ?? 'light',
+                'timeOut'             => (int) (($options['timeout'] ?? '') === '' ? 300 : $options['timeout']),
+                'customerEmailID'     => $order && $order->get_billing_email()
+                    ? $order->get_billing_email()
+                    : ($user->ID ? $user->user_email : ''),
+                'userName'            => $order
+                    ? trim($order->get_billing_first_name() . ' ' . $order->get_billing_last_name())
+                    : ($user->ID ? $user->display_name : ''),
+            ]);
+        } catch (\Throwable $e) {
+            error_log('Jio Pay init_checkout failed: ' . $e->getMessage());
+            $this->send_json_error(['message' => 'Could not open Jio Pay. Please try again.']);
+        }
+    }
+
+    /**
      * AJAX: start a sale (netbanking or card) through Jio.
      */
     public function ajax_initiate_sale()
@@ -1851,13 +2058,50 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
             }
 
-            $mode = isset($_POST['mode']) ? strtoupper(sanitize_text_field(wp_unslash($_POST['mode']))) : '';
-            if ($mode === '') {
-                $this->send_json_error(['message' => 'No payment mode was given.']);
+            // The popup sends back whichever code it displayed, so accept
+            // both the display codes (CREDIT_CARD) and the API codes (CC).
+            $requested = isset($_POST['payment_type']) ? $_POST['payment_type'] : ($_POST['mode'] ?? '');
+            $requested = sanitize_text_field(wp_unslash((string) $requested));
+
+            if ($requested === '') {
+                $this->send_json_error(['message' => 'No payment type was given.']);
+            }
+
+            $resolved = WC_Jio_Pay_Service::resolve_payment_type($requested);
+            if (is_wp_error($resolved)) {
+                $this->send_json_error(['message' => $resolved->get_error_message(), 'code' => $resolved->get_error_code()]);
             }
 
             $merchant_txn_no = WC_Jio_Pay_Service::generate_merchant_txn_no();
             $service         = $this->service();
+
+            // UPI QR is a different Jio endpoint, but the popup should not
+            // have to know that -- one initiate call, routed here.
+            if ($resolved['route'] === 'qr') {
+                $qr = $service->generate_qr([
+                    'amount'          => $context['amount'],
+                    'email'           => $this->resolve_customer_email($context['order']),
+                    'merchant_ref_no' => $merchant_txn_no,
+                    'invoice_no'      => $context['order'] ? 'INV' . $context['order']->get_id() : 'INV' . $merchant_txn_no,
+                ]);
+
+                if (is_wp_error($qr)) {
+                    $this->send_json_error(['message' => $qr->get_error_message(), 'code' => $qr->get_error_code()]);
+                }
+
+                $this->remember_txn_no($context['order'], $merchant_txn_no);
+
+                $this->send_json_success([
+                    'paymentType'   => $requested,
+                    'merchantTxnNo' => $merchant_txn_no,
+                    'amount'        => $context['amount'],
+                    'http_code'     => $qr['http_code'],
+                    'response'      => $qr['data'],
+                    'raw'           => $qr['data'] === null ? $qr['raw'] : null,
+                ]);
+            }
+
+            $mode = $resolved['mode'];
 
             $args = [
                 'amount'          => $context['amount'],
@@ -1888,6 +2132,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             $this->remember_txn_no($context['order'], $merchant_txn_no);
 
             $this->send_json_success([
+                'paymentType'   => $requested,
                 'merchantTxnNo' => $merchant_txn_no,
                 'amount'        => $context['amount'],
                 'http_code'     => $result['http_code'],
@@ -1956,14 +2201,16 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         ini_set('display_errors', 0);
 
         try {
-            $order_id = intval($_POST['order_id'] ?? 0);
-            if (!$order_id) {
-                $this->send_json_error(['message' => 'No order was given.']);
+            // Accepts the checkout reference or an owned order id, same as
+            // the other endpoints.
+            $context = $this->resolve_payment_context();
+            if (is_wp_error($context)) {
+                $this->send_json_error(['message' => $context->get_error_message(), 'code' => $context->get_error_code()]);
             }
 
-            $order = wc_get_order($order_id);
-            if (!$order || !$this->order_belongs_to_shopper($order)) {
-                $this->send_json_error(['message' => 'That order does not belong to this session.']);
+            $order = $context['order'];
+            if (!$order) {
+                $this->send_json_error(['message' => 'There is no order to check yet.']);
             }
 
             $merchant_txn_no = $order->get_meta('_jio_pay_merchant_txn_no');
