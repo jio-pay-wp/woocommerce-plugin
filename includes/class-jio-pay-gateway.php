@@ -2095,6 +2095,25 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 $this->send_json_error(['message' => $resolved->get_error_message(), 'code' => $resolved->get_error_code()]);
             }
 
+            // Enforce the merchant's own list, not just what the service can
+            // build. init_checkout filters the list it hands the popup, but
+            // that is presentation: without this check a request naming a
+            // method the merchant switched off would still be processed.
+            $enabled = $this->resolve_payment_types(get_option('woocommerce_jio_pay_settings', []));
+            $canonical = [
+                'NB' => 'NB', 'NETBANKING' => 'NB',
+                'CC' => 'CREDIT_CARD', 'CREDIT_CARD' => 'CREDIT_CARD',
+                'DC' => 'DEBIT_CARD', 'DEBIT_CARD' => 'DEBIT_CARD',
+                'UPI_QR' => 'UPI_QR', 'UPIQR' => 'UPI_QR',
+            ][strtoupper($requested)] ?? strtoupper($requested);
+
+            if (!in_array($canonical, $enabled, true)) {
+                $this->send_json_error([
+                    'message' => 'That payment method is not available on this store.',
+                    'code'    => 'jio_pay_payment_type_disabled',
+                ]);
+            }
+
             $merchant_txn_no = WC_Jio_Pay_Service::generate_merchant_txn_no();
             $service         = $this->service();
 
