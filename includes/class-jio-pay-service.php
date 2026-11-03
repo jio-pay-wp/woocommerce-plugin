@@ -49,12 +49,18 @@ class WC_Jio_Pay_Service
     const HTTP_TIMEOUT = 30;
 
     /**
-     * Jio rejects a sale with no aggregator id, so there is no point making
-     * the call. Confirmed against UAT: omitting the field returns
-     * "Aggregator ID is missing in the request", and sending one that is not
-     * valid for the environment returns "Invalid aggregatorID passed."
+     * Whether an aggregator id is required depends on the merchant, and only
+     * Jio can say which. Merchant JP2000000000016 is under aggregator
+     * JP2000000000001 and its sale is refused without one -- UAT answers
+     * "Aggregator ID is missing in the request". But Jio's own STATUS sample
+     * for JP2000000000031 carries no aggregatorID at all, which reads as a
+     * merchant that is not under an aggregator.
+     *
+     * So the field is sent when the merchant has one and omitted when not,
+     * matching Jio's SDK, and their own error is what decides it. Blocking
+     * locally would stop a direct merchant from transacting at all, on a
+     * rule we only know applies to aggregator-model merchants.
      */
-    const MISSING_AGGREGATOR_MESSAGE = 'Jio Pay is missing its Aggregator ID for this environment. Add it in WooCommerce > Settings > Payments > Jio Pay.';
 
     private $merchant_id;
     private $secret_key;
@@ -345,7 +351,6 @@ class WC_Jio_Pay_Service
             'currencyCode'    => self::CURRENCY_CODE,
             'customerEmailID' => (string) ($args['email'] ?? ''),
             'merchantId'      => $this->merchant_id,
-            'aggregatorID'    => $this->aggregator_id,
             'merchantTxnNo'   => (string) ($args['merchant_txn_no'] ?? ''),
             'paymentMode'     => $spec['paymentMode'],
             'payType'         => $spec['payType'],
@@ -353,6 +358,10 @@ class WC_Jio_Pay_Service
             'transactionType' => 'SALE',
             'txnDate'         => $this->txn_date(),
         ];
+
+        if ($this->aggregator_id !== '') {
+            $payload['aggregatorID'] = $this->aggregator_id;
+        }
 
         if (!empty($spec['paymentOptionCodes'])) {
             $payload['paymentOptionCodes'] = $spec['paymentOptionCodes'];
@@ -390,10 +399,6 @@ class WC_Jio_Pay_Service
             return new WP_Error('jio_pay_not_configured', 'Jio Pay credentials are not configured.');
         }
 
-        if ($this->aggregator_id === '') {
-            return new WP_Error('jio_pay_missing_aggregator', self::MISSING_AGGREGATOR_MESSAGE);
-        }
-
         $payload = $this->build_sale_payload($mode, $args);
         if (is_wp_error($payload)) {
             return $payload;
@@ -416,10 +421,6 @@ class WC_Jio_Pay_Service
             return new WP_Error('jio_pay_not_configured', 'Jio Pay credentials are not configured.');
         }
 
-        if ($this->aggregator_id === '') {
-            return new WP_Error('jio_pay_missing_aggregator', self::MISSING_AGGREGATOR_MESSAGE);
-        }
-
         $amount = $this->format_amount($args['amount'] ?? null);
         if (is_wp_error($amount)) {
             return $amount;
@@ -431,7 +432,6 @@ class WC_Jio_Pay_Service
         }
 
         $payload = [
-            'aggregatorID'  => $this->aggregator_id,
             'amount'        => $amount,
             'currency'      => apply_filters('jio_pay_qr_currency_code', self::QR_CURRENCY_CODE, $this->environment),
             'emailID'       => (string) ($args['email'] ?? ''),
@@ -441,6 +441,10 @@ class WC_Jio_Pay_Service
             'merchantRefNo' => $reference,
             'requestType'   => 'UPIQR',
         ];
+
+        if ($this->aggregator_id !== '') {
+            $payload['aggregatorID'] = $this->aggregator_id;
+        }
 
         $payload = apply_filters('jio_pay_qr_payload', $payload, $args, $this->environment);
         $payload = $this->sign($payload);
