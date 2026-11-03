@@ -398,6 +398,41 @@ A `cached: true` field on the reply means it was served from that 5 second
 cache rather than freshly fetched from Jio. It is informational; treat the
 payload the same either way.
 
+## Verified against Jio UAT (merchant JP2001100068236)
+
+| Call | Result |
+|------|--------|
+| `initiateSale` NB | `R1000`, with `redirectURI` and `tranCtx` |
+| `command` STATUS | `P0030` "Awaiting user action" |
+| `generateQR` | `039` / `REJ` "Internal error. Please contact our Tech Support." |
+
+The signing recipe, payload shape, endpoints and response passthrough are
+confirmed working end to end for NB and STATUS against live UAT.
+
+`aggregatorID` is confirmed **optional**: this merchant has none, Jio returns
+`aggregatorID: null`, and the sale is accepted. It is sent only when the
+merchant has one.
+
+### generateQR on UAT
+
+The QR rejection is not ours, as far as can be determined from this side:
+
+- **The URL is right.** `https://uat.jiopay.co.in/tsp/pg/api/generateQR` is
+  the only one of three candidates that reaches a handler --
+  `/pg/api/generateQR` times out and `/tsp/pg/api/v2/generateQR` returns
+  "Resource not found". The rejection is a structured business reply, not a
+  routing failure.
+- **The credentials are right.** The same merchant and secret return `R1000`
+  on `initiateSale`.
+- **The currency is not the cause.** `365` (as documented) and `356` both
+  return the identical error.
+- **The payload matches Jio's documented sample** field for field, less
+  `aggregatorID`, which this merchant does not have.
+
+So the open question for Jio is whether **JP2001100068236 is enabled for UPI
+QR on UAT**, and what their "Internal error" corresponds to. Their message
+asks us to contact their tech support, so that is the next step.
+
 ## Open items we need from Jio
 
 1. **`UPI_VPA` and `UPI_INTENT` are not implemented.** Your integration note
