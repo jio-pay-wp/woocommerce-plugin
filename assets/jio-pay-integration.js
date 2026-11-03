@@ -926,14 +926,23 @@ jQuery(document).ready(function ($) {
                     // though calling it again with this checkoutRef is safe
                     // and returns the same reference.
                     amount: config.amount,
-                    currency: config.currency,
                     allowedPaymentTypes: config.allowedPaymentTypes,
                     merchantName: config.merchantName,
                     merchantLogo: config.merchantLogo,
-                    theme: config.theme,
-                    timeOut: config.timeOut,
-                    env: config.testMode ? 'uat':'prod',
 
+                    // The fallback matters: the Theme setting is blank on a
+                    // fresh install, and passing "" where the SDK wants a
+                    // theme is not the same as passing nothing. This keeps
+                    // the behaviour the plugin had before 1.4.0.
+                    theme: config.theme || { color: "#E39B2B" },
+                    timeOut: config.timeOut,
+
+                    // Straight from the server, already lower case. Not
+                    // derived from testMode here: the SDK compares env with
+                    // === against "uat" and "prod", so the exact string
+                    // matters and one source of truth is safer.
+                    env: config.env,
+                    
                     // Prefill only, for the popup's own fields.
                     customerEmailID: config.customerEmailID || customerData.email,
                     email: config.customerEmailID || customerData.email,

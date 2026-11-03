@@ -334,7 +334,15 @@ document the requirement; the plugin sends lower case either way.
    your documented `initiateSale` or `generateQR` samples include it. We
    currently do not send it. Confirm whether it belongs in either payload --
    and therefore in the `secureHash`.
-6. **Card data and PCI scope.** Routing `cardNo`/`cvv` through the merchant's
+6. **Does `primaryMethod` still apply?** It is a config prop the SDK reads,
+   and the plugin has a "Payment Method" setting that looks intended for it,
+   but nothing has ever passed it. Should it be sent, and what does it change?
+7. **What are `clientKey` and `clientSecret` for?** The bundle destructures
+   both, alongside `secretKey`. If they are an alternative credential pair --
+   particularly one that can be exchanged server side for a short-lived
+   browser token -- that may be the answer to the whole problem above. Please
+   confirm what they do and whether they are usable today.
+8. **Card data and PCI scope.** Routing `cardNo`/`cvv` through the merchant's
    WordPress server puts every store in PCI DSS scope (SAQ-A to SAQ-D). This
    is unavoidable while `secureHash` covers the card fields. Can you offer
    hosted card capture or tokenisation, so card data goes browser-to-Jio and
