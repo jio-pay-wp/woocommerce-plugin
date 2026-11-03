@@ -202,6 +202,7 @@ payment_type=NB
 |----------------|-----------|-----------------------|
 | `NB`           | `initiateSale` (`paymentMode=NB`, `payType=0`) | — |
 | `UPI_QR`       | `generateQR` (`requestType=UPIQR`) | — |
+| `UPI_VPA`      | `initiateSale` (`paymentMode=UPI`, `payType=1`) | the UPI handle, below |
 | `CREDIT_CARD`  | `initiateSale` (`paymentMode=CARD`, `paymentOptionCodes=CC`, `payType=1`) | card fields below |
 | `DEBIT_CARD`   | `initiateSale` (`paymentMode=CARD`, `paymentOptionCodes=DC`, `payType=1`) | card fields below |
 
@@ -216,6 +217,16 @@ nameOnCard=John Doe
 
 `cardExpiry` is `YYYYMM`. Card fields are passed straight to Jio; they are
 never stored, and the server log keeps only the last four digits of the PAN.
+
+For `UPI_VPA`, send the handle the shopper typed:
+
+```
+customerUPIAlias=someone@ibl
+```
+
+`vpa`, `upiId`, `upi_id` and `customer_upi_alias` are accepted as aliases, so
+whichever name the popup's input uses will work. Omitting it returns
+`jio_pay_missing_field` rather than a request Jio would reject.
 
 ### Response
 
@@ -404,6 +415,7 @@ payload the same either way.
 |------|--------|
 | `initiateSale` NB | `R1000`, with `redirectURI` and `tranCtx` |
 | `command` STATUS | `P0030` "Awaiting user action" |
+| `initiateSale` UPI_VPA | `R1000`, with `redirectURI` and `tranCtx` |
 | `generateQR` | `039` / `REJ` "Internal error. Please contact our Tech Support." |
 
 The signing recipe, payload shape, endpoints and response passthrough are
@@ -435,11 +447,10 @@ asks us to contact their tech support, so that is the next step.
 
 ## Open items we need from Jio
 
-1. **`UPI_VPA` and `UPI_INTENT` are not implemented.** Your integration note
-   documents NB, CARD, generateQR and STATUS only. We will not guess field
-   names, because a wrong payload hashes to a `secureHash` your validator
-   rejects. Please send the `initiateSale` field list for both and we will add
-   them.
+1. **`UPI_INTENT` is not implemented.** `UPI_VPA` is, now that you have sent
+   its field list. Please send the `initiateSale` fields for `UPI_INTENT` and
+   it will be added the same way -- we will not guess, because a wrong
+   payload hashes to a `secureHash` your validator rejects.
 2. **`generateQR` currency.** Your sample uses `currency=365`, while
    `initiateSale` uses `currencyCode=356`. 365 is not INR in ISO 4217. Which
    is correct? We currently send 365 for QR as documented.

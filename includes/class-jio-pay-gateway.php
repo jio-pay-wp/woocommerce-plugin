@@ -2227,6 +2227,16 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 }
             }
 
+            // The UPI handle, for UPI_VPA. Accept the spellings a caller is
+            // likely to use: Jio's own field name, and the obvious short
+            // ones, since the popup collects this in a free-text box.
+            foreach (['customerUPIAlias', 'customer_upi_alias', 'vpa', 'upiId', 'upi_id'] as $field) {
+                if (!empty($_POST[$field])) {
+                    $args['customerUPIAlias'] = sanitize_text_field(wp_unslash($_POST[$field]));
+                    break;
+                }
+            }
+
             if (empty($args['customerName']) && $context['order']) {
                 $args['customerName'] = trim($context['order']->get_billing_first_name() . ' ' . $context['order']->get_billing_last_name());
             }

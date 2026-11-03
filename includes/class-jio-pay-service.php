@@ -222,10 +222,9 @@ class WC_Jio_Pay_Service
      * Keyed by the code the checkout sends us. 'requires' lists the
      * caller-supplied fields that must be present and non-empty.
      *
-     * UPI_VPA and UPI_INTENT are deliberately absent: Jio's integration note
-     * documents NB, CARD, generateQR and STATUS only. Guessing their field
-     * names would produce a payload that hashes to something their validator
-     * rejects, so they are added once Jio supplies the contract.
+     * UPI_INTENT is deliberately absent: Jio has not supplied its field
+     * list. Guessing would produce a payload that hashes to something their
+     * validator rejects, so it is added once they do.
      *
      * @return array
      */
@@ -252,6 +251,15 @@ class WC_Jio_Pay_Service
                 'extra'              => ['cardNo', 'cvv', 'cardExpiry', 'nameOnCard', 'customerName'],
                 'requires'           => ['cardNo', 'cvv', 'cardExpiry', 'nameOnCard'],
             ],
+            // Paying to a UPI handle the shopper types in. Per Jio's sample:
+            // paymentMode UPI, payType 1, and the alias carried in
+            // customerUPIAlias. No paymentOptionCodes.
+            'UPI_VPA' => [
+                'paymentMode' => 'UPI',
+                'payType'     => '1',
+                'extra'       => ['customerUPIAlias'],
+                'requires'    => ['customerUPIAlias'],
+            ],
         ];
     }
 
@@ -277,6 +285,9 @@ class WC_Jio_Pay_Service
             'DC'          => ['route' => 'sale', 'mode' => 'DC'],
             'UPI_QR'      => ['route' => 'qr',   'mode' => 'UPI_QR'],
             'UPIQR'       => ['route' => 'qr',   'mode' => 'UPI_QR'],
+            'UPI_VPA'     => ['route' => 'sale', 'mode' => 'UPI_VPA'],
+            'UPIVPA'      => ['route' => 'sale', 'mode' => 'UPI_VPA'],
+            'VPA'         => ['route' => 'sale', 'mode' => 'UPI_VPA'],
         ];
 
         $code = strtoupper(trim((string) $code));
@@ -285,9 +296,9 @@ class WC_Jio_Pay_Service
             return $map[$code];
         }
 
-        // UPI_VPA and UPI_INTENT land here on purpose: Jio has not documented
-        // their initiateSale fields, and a guessed payload would hash to
-        // something their validator rejects. Fail loudly instead.
+        // UPI_INTENT lands here on purpose: Jio has not documented its
+        // initiateSale fields, and a guessed payload would hash to something
+        // their validator rejects. Fail loudly instead.
         return new WP_Error(
             'jio_pay_unsupported_payment_type',
             sprintf('Payment type "%s" is not supported server side yet.', $code)
@@ -304,7 +315,7 @@ class WC_Jio_Pay_Service
      */
     public static function supported_payment_types()
     {
-        return ['NB', 'UPI_QR', 'CREDIT_CARD', 'DEBIT_CARD'];
+        return ['NB', 'UPI_QR', 'UPI_VPA', 'CREDIT_CARD', 'DEBIT_CARD'];
     }
 
     /**
