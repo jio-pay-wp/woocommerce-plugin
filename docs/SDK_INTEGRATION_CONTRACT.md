@@ -275,14 +275,25 @@ accepting them from the browser is what made the old flow unsafe:
 
 `success: false` with a `code`:
 
+Every error from these endpoints carries a `code`. Branch on the code, never
+on the message text -- the messages are shopper-facing and may be reworded or
+translated.
+
 | Code | Meaning | SDK should |
 |------|---------|------------|
 | `jio_pay_expired_ref` | `checkoutRef` expired (2h TTL) | Close, ask shopper to reload |
 | `jio_pay_ref_not_yours` | Reference does not match session | Close; do not retry |
-| `jio_pay_unsupported_payment_type` | Type not supported server side | Should not happen if `allowedPaymentTypes` is respected |
+| `jio_pay_bad_ref` | No reference sent | Fix the call |
+| `jio_pay_missing_payment_type` | No `payment_type` sent | Fix the call |
+| `jio_pay_payment_type_disabled` | Merchant has that method switched off | Should not happen if `allowedPaymentTypes` is respected |
+| `jio_pay_unsupported_payment_type` | Type not supported server side (`UPI_VPA`, `UPI_INTENT`) | As above |
 | `jio_pay_missing_field` | A required card field is absent | Re-prompt |
 | `jio_pay_bad_amount` | Cart/order priced at zero or less | Close |
 | `jio_pay_not_configured` | Merchant has no credentials saved | Close |
+| `jio_pay_no_order_yet` | `txn_status` called before any payment started | Nothing to check; not an error worth showing |
+| `jio_pay_no_transaction` | Order exists but has no Jio transaction | As above |
+| `jio_pay_not_your_order` | Order does not belong to this session | Close; do not retry |
+| `jio_pay_internal_error` | Something failed on the store | Treat the outcome as UNCONFIRMED -- see below |
 
 **On a transport failure or an unparseable reply, do not tell the shopper the
 payment failed.** The charge may have succeeded. Say the outcome is
