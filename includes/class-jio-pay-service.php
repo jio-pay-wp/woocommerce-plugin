@@ -337,7 +337,6 @@ class WC_Jio_Pay_Service
             'currencyCode'    => self::CURRENCY_CODE,
             'customerEmailID' => (string) ($args['email'] ?? ''),
             'merchantId'      => $this->merchant_id,
-            'aggregatorID'    => $this->aggregator_id,
             'merchantTxnNo'   => (string) ($args['merchant_txn_no'] ?? ''),
             'paymentMode'     => $spec['paymentMode'],
             'payType'         => $spec['payType'],
@@ -345,6 +344,14 @@ class WC_Jio_Pay_Service
             'transactionType' => 'SALE',
             'txnDate'         => $this->txn_date(),
         ];
+
+        // Only send aggregatorID when there is one. Jio's own SDK spreads it
+        // conditionally -- `...aggId && {aggregatorID: aggId}` -- so a blank
+        // value is not something their reference implementation ever sends,
+        // and their error responses echo it back when it is empty.
+        if ($this->aggregator_id !== '') {
+            $payload['aggregatorID'] = $this->aggregator_id;
+        }
 
         if (!empty($spec['paymentOptionCodes'])) {
             $payload['paymentOptionCodes'] = $spec['paymentOptionCodes'];
@@ -415,7 +422,6 @@ class WC_Jio_Pay_Service
         }
 
         $payload = [
-            'aggregatorID'  => $this->aggregator_id,
             'amount'        => $amount,
             'currency'      => apply_filters('jio_pay_qr_currency_code', self::QR_CURRENCY_CODE, $this->environment),
             'emailID'       => (string) ($args['email'] ?? ''),
@@ -425,6 +431,10 @@ class WC_Jio_Pay_Service
             'merchantRefNo' => $reference,
             'requestType'   => 'UPIQR',
         ];
+
+        if ($this->aggregator_id !== '') {
+            $payload['aggregatorID'] = $this->aggregator_id;
+        }
 
         $payload = apply_filters('jio_pay_qr_payload', $payload, $args, $this->environment);
         $payload = $this->sign($payload);
