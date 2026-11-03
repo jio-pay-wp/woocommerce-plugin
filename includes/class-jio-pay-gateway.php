@@ -1777,8 +1777,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      * calls init_checkout, which keeps the envelope because its client
      * depends on it.
      *
+     * Jio's reply is forwarded exactly as received -- no field is added,
+     * removed or renamed on the way through. Anything the caller needs that
+     * is not in Jio's reply has to come from somewhere else.
+     *
      * @param array|null $jio      Jio's parsed reply.
-     * @param string     $raw_body Raw body, used only when parsing failed.
+     * @param string     $raw_body Raw body, logged only when parsing failed.
      */
     private function send_jio_reply($jio, $raw_body = '')
     {
@@ -1787,10 +1791,11 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             // reply to forward, and returning nothing would read as a
             // success to a caller checking responseCode, so say so in the
             // same shape.
+            error_log('Jio Pay: unreadable response from gateway: ' . substr((string) $raw_body, 0, 500));
+
             $this->send_jio_error(
                 'jio_pay_unreadable_response',
-                'The payment gateway returned an unreadable response. Do not retry; check the payment status.',
-                ['raw' => $raw_body]
+                'The payment gateway returned an unreadable response. Do not retry; check the payment status.'
             );
         }
 

@@ -326,6 +326,12 @@ document the requirement; the plugin sends lower case either way.
 
 ## Reading the response
 
+> **Rule: Jio's response is forwarded verbatim.** `initiate_sale`,
+> `generate_qr` and `txn_status` return exactly the object Jio returned --
+> no envelope, no added fields, nothing renamed, no metadata of ours
+> alongside it. Whatever Jio's API answers today is what the SDK receives.
+
+
 `initiate_sale`, `generate_qr` and `txn_status` answer with **exactly the
 object Jio returned, and nothing else**. There is no envelope around it:
 
