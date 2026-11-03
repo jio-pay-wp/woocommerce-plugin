@@ -1856,7 +1856,17 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      */
     private function resolve_payment_context()
     {
-        $ref = isset($_POST['checkout_ref']) ? sanitize_text_field(wp_unslash($_POST['checkout_ref'])) : '';
+        // checkoutRef is accepted alongside checkout_ref: the SDK sends the
+        // camelCase spelling it was given in its own config, which is a fair
+        // reading of the contract. Taking both costs nothing and saves a
+        // round trip through Jio's release process.
+        $ref = '';
+        foreach (['checkout_ref', 'checkoutRef'] as $field) {
+            if (!empty($_POST[$field])) {
+                $ref = sanitize_text_field(wp_unslash($_POST[$field]));
+                break;
+            }
+        }
 
         if ($ref !== '') {
             $bound = $this->resolve_checkout_ref($ref);

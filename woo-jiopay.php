@@ -137,6 +137,50 @@ add_action('admin_head', function() {
 /**
  * Load the payment gateway
  */
+// Accept a JSON request body on our own AJAX actions.
+//
+// admin-ajax.php routes on $_REQUEST['action'], which PHP only populates from
+// a form-encoded body. A client posting application/json -- which is what
+// axios does by default when handed an object -- therefore never reaches a
+// handler at all: WordPress answers "0" before any hook of ours runs. This
+// runs during plugins_loaded, before admin-ajax.php reads the action, and
+// copies a JSON body into $_POST so the request routes normally.
+//
+// Deliberately narrow: AJAX requests only, only when no form-encoded action
+// was sent, and only for actions of ours. The content type header is not
+// checked, because some SAPIs expose it as HTTP_CONTENT_TYPE instead and a
+// body that parses as one of our actions is unambiguous without it.
+add_action('plugins_loaded', function () {
+    if (!defined('DOING_AJAX') || !DOING_AJAX) {
+        return;
+    }
+
+    if (!empty($_POST['action'])) {
+        return;
+    }
+
+    $raw = file_get_contents('php://input');
+    if (!is_string($raw) || $raw === '') {
+        return;
+    }
+
+    $decoded = json_decode($raw, true);
+    if (!is_array($decoded) || empty($decoded['action'])) {
+        return;
+    }
+
+    if (strpos((string) $decoded['action'], 'jio_pay_') !== 0) {
+        return;
+    }
+
+    foreach ($decoded as $key => $value) {
+        if (is_scalar($value)) {
+            $_POST[$key]    = $value;
+            $_REQUEST[$key] = $value;
+        }
+    }
+}, 0);
+
 add_action('plugins_loaded', function () {
     // Check if WooCommerce is active
     if (!class_exists('WC_Payment_Gateway')) {
