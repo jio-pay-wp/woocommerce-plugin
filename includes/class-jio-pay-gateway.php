@@ -2291,18 +2291,41 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 $this->send_json_error(['message' => 'This order has no Jio transaction to check.', 'code' => 'jio_pay_no_transaction']);
             }
 
+            // Short-lived cache in front of Jio.
+            //
+            // The SDK polls this on a 2 second interval and only clears the
+            // interval on two specific response codes, so anything else --
+            // a pending payment, or a response it cannot read -- polls
+            // indefinitely. Without a cache that is one outbound Jio call
+            // every 2 seconds per abandoned checkout, which is both load we
+            // are sending Jio and load Jio may rate-limit or bill us for.
+            //
+            // Caching the reply for a few seconds bounds the outbound rate
+            // regardless of how fast a client asks, while staying far below
+            // the time a real status change takes to appear.
+            $cache_key = 'jio_pay_status_' . md5($merchant_txn_no);
+            $cached    = get_transient($cache_key);
+
+            if (is_array($cached)) {
+                $this->send_json_success($cached + ['cached' => true]);
+            }
+
             $result = $this->service()->check_status($merchant_txn_no);
 
             if (is_wp_error($result)) {
                 $this->send_json_error(['message' => $result->get_error_message(), 'code' => $result->get_error_code()]);
             }
 
-            $this->send_json_success([
+            $payload = [
                 'merchantTxnNo' => $merchant_txn_no,
                 'http_code'     => $result['http_code'],
                 'response'      => $result['data'],
                 'raw'           => $result['data'] === null ? $result['raw'] : null,
-            ]);
+            ];
+
+            set_transient($cache_key, $payload, 5);
+
+            $this->send_json_success($payload);
         } catch (\Throwable $e) {
             error_log('Jio Pay txn_status failed: ' . $e->getMessage());
             $this->send_json_error(['message' => 'Could not check the payment status.', 'code' => 'jio_pay_internal_error']);

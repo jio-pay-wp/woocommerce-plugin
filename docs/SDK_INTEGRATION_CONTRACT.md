@@ -324,6 +324,58 @@ URLs, but with `returnURL` unset and the non-production redirect path taken.
 to production URLs. Please make these comparisons case-insensitive, or
 document the requirement; the plugin sends lower case either way.
 
+## Reading the response (the one thing to get right)
+
+Every reply is the WordPress envelope. Jio's own reply is nested inside it,
+at `data.response` -- it is **not** at the top level:
+
+```js
+const body = (await axios.post(ajaxUrl, payload)).data;
+
+body.success                        // true / false
+body.data.merchantTxnNo             // minted by the server
+body.data.amount                    // what is actually being charged
+body.data.response.responseCode     // Jio's code, e.g. "R1000"
+body.data.response.redirectURI      // Jio's fields, verbatim
+body.data.response.tranCtx
+body.data.code                      // on failure, e.g. "jio_pay_expired_ref"
+```
+
+So a check written against the old direct-to-Jio flow needs one extra hop:
+
+```js
+// before (talking to Jio directly)
+if (res?.responseCode === "R1000") { … }
+
+// now
+if (body?.data?.response?.responseCode === "R1000") { … }
+```
+
+Same for status: `body.data.response.txnResponseCode`, not
+`body.txnResponseCode`.
+
+The nesting is deliberate. Jio's reply is passed through untouched, so
+flattening it into the envelope would let a field named `success` or `data`
+in a future Jio response silently corrupt the envelope.
+
+## Polling `txn_status`
+
+Two things the plugin needs the SDK to do:
+
+1. **Have a terminal condition for every outcome, not just success and
+   failure.** A poll that clears its interval only on specific response codes
+   runs forever when the payment is still pending, or when the response
+   cannot be read. The plugin caches status replies for 5 seconds so a
+   runaway poll cannot multiply into outbound Jio traffic, but the loop
+   itself still runs in the shopper's browser until the tab closes.
+2. **Cap it.** Stop after a bounded number of attempts, or after the
+   configured `timeOut`, and then tell the shopper the outcome is
+   unconfirmed rather than polling silently.
+
+A `cached: true` field on the reply means it was served from that 5 second
+cache rather than freshly fetched from Jio. It is informational; treat the
+payload the same either way.
+
 ## Open items we need from Jio
 
 1. **`UPI_VPA` and `UPI_INTENT` are not implemented.** Your integration note
