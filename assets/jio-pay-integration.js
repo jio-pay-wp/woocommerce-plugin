@@ -901,8 +901,8 @@ jQuery(document).ready(function ($) {
                 window.jioPaymentHandled = false;
 
                 // What the page hands the SDK now. Note what is absent: no
-                // secret, no merchant or aggregator id, no MCC, no amount and
-                // no transaction number. The SDK asks init_checkout for the
+                // secret, no merchant or aggregator id, no amount and no
+                // transaction number. The SDK asks init_checkout for the
                 // ones it actually needs (event 1), and the server mints the
                 // transaction number when a payment is started (event 2).
                 //
@@ -929,6 +929,14 @@ jQuery(document).ready(function ($) {
                     allowedPaymentTypes: config.allowedPaymentTypes,
                     merchantName: config.merchantName,
                     merchantLogo: config.merchantLogo,
+
+                    // The merchant category code, from the gateway settings
+                    // for the active environment. The SDK's UPI screen hides
+                    // the "pay by UPI ID" field unless this is an MCC it
+                    // recognises (it waives the check on iOS), so without it
+                    // UPI_VPA is unreachable on Android and desktop even when
+                    // the method is switched on.
+                    mcc_code: config.mcc_code,
 
                     // The fallback matters: the Theme setting is blank on a
                     // fresh install, and passing "" where the SDK wants a
@@ -960,6 +968,7 @@ jQuery(document).ready(function ($) {
                     checkoutRef: paymentOptions.checkoutRef,
                     amount: paymentOptions.amount,
                     allowedPaymentTypes: paymentOptions.allowedPaymentTypes,
+                    mcc_code: paymentOptions.mcc_code,
                     // Lower case, straight from the server. The SDK
                     // compares this with === against "uat" and "prod".
                     env: config.env,

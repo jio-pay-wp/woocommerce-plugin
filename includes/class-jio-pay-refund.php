@@ -31,18 +31,25 @@ class WC_Jio_Pay_Refund {
 
     private $merchant_id;
     private $secret_key;
+    private $aggregator_id;
     private $environment;
     private $api_endpoint;
     private $log_file;
 
-    public function __construct($merchant_id, $secret_key, $environment = 'uat') {
+    /**
+     * $aggregator_id is last so existing three-argument callers keep working.
+     * It is sent only when the merchant actually has one -- see the note on
+     * WC_Jio_Pay_Service, where the same rule applies to initiateSale.
+     */
+    public function __construct($merchant_id, $secret_key, $environment = 'uat', $aggregator_id = '') {
         $this->merchant_id = $merchant_id;
         $this->secret_key = $secret_key;
+        $this->aggregator_id = (string) $aggregator_id;
         $this->environment = $environment;
         
         // Set API endpoint based on environment
         $this->api_endpoint = $environment === 'prod' 
-            ? 'https://jiopay.co.in/tsp/pg/api/command'
+            ? 'https://jiopay.co.in/pg/api/command'
             : 'https://uat.jiopay.co.in/tsp/pg/api/command';
         
         // Set log file path
@@ -175,8 +182,15 @@ class WC_Jio_Pay_Refund {
         }
 
 
-        // Get original merchant transaction number (from order meta)
+        // Get original merchant transaction number (from order meta).
+        // Two keys hold it: _jio_pay_merchant_tr_id is the original, and
+        // _jio_pay_merchant_txn_no is what the server-side flow records when
+        // it mints the number. Falling back to the second means orders whose
+        // tr_id the return handler blanked are still refundable.
         $original_merchant_txn_no = $order->get_meta('_jio_pay_merchant_tr_id');
+        if (!$original_merchant_txn_no) {
+            $original_merchant_txn_no = $order->get_meta('_jio_pay_merchant_txn_no');
+        }
         if (!$original_merchant_txn_no) {
             $this->log_refund($order_id, 'failed', [
                 'error' => 'Original merchant transaction ID not found',
@@ -189,22 +203,19 @@ class WC_Jio_Pay_Refund {
             ];
         }
 
-        // Generate a new unique merchantTxnNo for this refund (must be integer)
-        $refund_merchant_txn_no = (string) (time() . rand(100, 999));
+        // Generate a new unique merchantTxnNo for this refund. Use the same
+        // generator as a sale: Jio has accepted those 10-digit numbers all
+        // along, where the old time() . rand() here produced 13 digits that
+        // no successful request has ever used.
+        $refund_merchant_txn_no = class_exists('WC_Jio_Pay_Service')
+            ? WC_Jio_Pay_Service::generate_merchant_txn_no()
+            : (string) wp_rand(1000000000, 9999999999);
 
-        // Get the authorization ID (Auth ID from payment response - stored as transaction ID)
+        // The payment's auth id, for the audit log only. It used to be a hard
+        // gate -- no transaction id, no refund -- which blocked every order
+        // the return handler had completed with an empty one, and guarded a
+        // value the REFUND request does not even carry.
         $auth_id = $order->get_transaction_id();
-        if (!$auth_id) {
-            $this->log_refund($order_id, 'failed', [
-                'error' => 'Authorization ID (transaction ID) not found',
-                'original_merchant_txn_no' => $original_merchant_txn_no
-            ]);
-            return [
-                'success' => false,
-                'message' => 'Authorization ID not found in order',
-                'error_code' => 'auth_id_not_found'
-            ];
-        }
 
         $amount = $order->get_total();
 
@@ -225,6 +236,13 @@ class WC_Jio_Pay_Refund {
             'transactionType' => 'REFUND',
             'amount' => $amount
         ];
+
+        // Sent only when the merchant is under an aggregator. initiateSale is
+        // refused without it for those merchants, so a REFUND almost certainly
+        // is too; a direct merchant must not send an empty one.
+        if ($this->aggregator_id !== '') {
+            $refund_data['aggregatorID'] = $this->aggregator_id;
+        }
 
         // Generate secureHash (sorted, excluding secureHash)
         $refund_data['secureHash'] = $this->generate_secure_hash($refund_data, $this->secret_key);
@@ -297,23 +315,53 @@ class WC_Jio_Pay_Refund {
                     'refund_merchant_txn_no' => $refund_merchant_txn_no,
                     'amount' => $amount
                 ];
-            } else {
-                // Status check failed
-                $order->update_status('on-hold', __('Refund accepted but status check pending', 'woo-jiopay'));
-                $order->save();
+            } elseif (!empty($status_result['pending'])) {
+                // Jio took the refund but has not settled it yet, which is the
+                // normal case a second after submitting. The order keeps the
+                // status it had: demoting a paid order to on-hold here said
+                // something untrue about the payment, not about the refund.
+                $order->add_order_note(sprintf(
+                    __('Refund accepted by JioPay and still processing. Refund Txn ID: %s. Use "Check Refund Status" to confirm.', 'woo-jiopay'),
+                    $refund_merchant_txn_no
+                ));
 
                 $this->log_refund($order_id, 'pending', [
                     'refund_merchant_txn_no' => $refund_merchant_txn_no,
                     'original_merchant_txn_no' => $original_merchant_txn_no,
                     'refund_amount' => $amount,
-                    'status_check_error' => $status_result['message']
+                    'txn_status' => $status_result['txn_status'] ?? '',
+                    'status_check_message' => $status_result['message']
                 ]);
 
                 return [
                     'success' => false,
-                    'message' => 'Refund accepted but status pending: ' . $status_result['message'],
+                    'message' => 'Refund accepted and processing. Use "Check Refund Status" to confirm: ' . $status_result['message'],
                     'refund_merchant_txn_no' => $refund_merchant_txn_no,
                     'error_code' => 'status_pending'
+                ];
+            } else {
+                // Jio answered, and the answer is that the refund did not go
+                // through. Leave the order alone and say so plainly.
+                $order->add_order_note(sprintf(
+                    __('JioPay refund was not completed. Refund Txn ID: %s. Reason: %s', 'woo-jiopay'),
+                    $refund_merchant_txn_no,
+                    $status_result['message']
+                ));
+
+                $this->log_refund($order_id, 'failed', [
+                    'refund_merchant_txn_no' => $refund_merchant_txn_no,
+                    'original_merchant_txn_no' => $original_merchant_txn_no,
+                    'refund_amount' => $amount,
+                    'txn_status' => $status_result['txn_status'] ?? '',
+                    'status_check_message' => $status_result['message'],
+                    'status_check_response' => $status_result
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Refund rejected: ' . $status_result['message'],
+                    'refund_merchant_txn_no' => $refund_merchant_txn_no,
+                    'error_code' => $status_result['error_code'] ?? 'refund_rejected'
                 ];
             }
         } else {
@@ -382,7 +430,7 @@ class WC_Jio_Pay_Refund {
             }
 
             $response_body = wp_remote_retrieve_body($response);
-            $parsed_response = $this->parse_api_response($response_body);
+            $parsed_response = $this->parse_api_response($response_body, 'status');
 
             error_log('Status Check Response: ' . json_encode($parsed_response));
 
@@ -519,24 +567,24 @@ class WC_Jio_Pay_Refund {
      * @param string $response_body Raw API response
      * @return array Parsed response data
      */
-    private function parse_api_response($response_body) {
+    private function parse_api_response($response_body, $kind = 'request') {
         // Try JSON first
         $json_response = json_decode($response_body, true);
         if (json_last_error() === JSON_ERROR_NONE && is_array($json_response)) {
-            return $this->normalize_json_response($json_response);
+            return $this->normalize_json_response($json_response, $kind);
         }
 
         // Try XML
         $xml_response = @simplexml_load_string($response_body);
         if ($xml_response) {
-            return $this->normalize_xml_response($xml_response);
+            return $this->normalize_xml_response($xml_response, $kind);
         }
 
         // Try parsing as URL-encoded response
         $parsed = [];
         parse_str($response_body, $parsed);
         if (!empty($parsed)) {
-            return $this->normalize_url_encoded_response($parsed);
+            return $this->normalize_url_encoded_response($parsed, $kind);
         }
 
         // Return raw response
@@ -554,23 +602,56 @@ class WC_Jio_Pay_Refund {
      * @param array $response JSON response
      * @return array Normalized response
      */
-    private function normalize_json_response($response) {
-        // Check for success indicators
-        $success = false;
-        if (isset($response['success']) && $response['success'] === true) {
-            $success = true;
-        } elseif (isset($response['txnResponseCode']) && $response['txnResponseCode'] === '0000') {
-            $success = true;
-        } elseif (isset($response['responseCode']) && ($response['responseCode'] === '0000' || $response['responseCode'] === '000' || $response['responseCode'] === 'R1000')) {
-            // R1000 = Request processed (accepted for processing) - success for refund requests
-            $success = true;
+    private function normalize_json_response($response, $kind = 'request') {
+        $txn_status = strtoupper((string) ($response['txnStatus'] ?? ''));
+        $txn_code   = (string) ($response['txnResponseCode'] ?? '');
+        $envelope   = (string) ($response['responseCode'] ?? '');
+
+        // Whether Jio understood the call. This is NOT whether the money
+        // moved: a STATUS reply says responseCode 000 / "Request processed
+        // successfully" even when it is reporting a rejected transaction.
+        $envelope_ok = (isset($response['success']) && $response['success'] === true)
+            || in_array($envelope, ['0000', '000', 'R1000'], true);
+
+        $pending = false;
+
+        if ($kind === 'status') {
+            // Reading an outcome. txnStatus is the authority; SUC is Jio's
+            // success value (the admin status screen already relied on it).
+            // Treating envelope_ok as success here is what used to mark a
+            // REJected refund as done and flip the order to 'refunded'.
+            if ($txn_status !== '') {
+                $success = in_array($txn_status, ['SUC', 'SUCCESS'], true);
+                $pending = !$success && !in_array($txn_status, ['REJ', 'FAIL', 'FAILED', 'CAN', 'CANCELLED'], true);
+            } elseif ($txn_code !== '') {
+                $success = ($txn_code === '0000');
+            } else {
+                // Understood, but carrying no verdict yet.
+                $success = false;
+                $pending = $envelope_ok;
+            }
+        } else {
+            // Submitting a REFUND. Acceptance for processing is the most any
+            // reply can mean at this point, so envelope_ok is the right test
+            // -- unless the same reply already reports a rejection.
+            $success = $envelope_ok && !in_array($txn_status, ['REJ', 'FAIL', 'FAILED'], true);
         }
 
         $refund_id = $response['txnAuthID'] ?? $response['txnID'] ?? $response['refund_id'] ?? '';
-        
+
+        if ($success) {
+            $default_message = 'Refund successful';
+        } elseif ($pending) {
+            $default_message = 'Refund is still being processed';
+        } else {
+            $default_message = 'Refund failed';
+        }
+
         return [
             'success' => $success,
-            'message' => $response['txnRespDescription'] ?? $response['respDescription'] ?? $response['message'] ?? ($success ? 'Refund successful' : 'Refund failed'),
+            'pending' => $pending,
+            'txn_status' => $txn_status,
+            'message' => $response['txnRespDescription'] ?? $response['respDescription'] ?? $response['message'] ?? $default_message,
             'error_code' => $response['txnResponseCode'] ?? $response['responseCode'] ?? '',
             'refund_id' => $refund_id,
             'response_code' => $response['txnResponseCode'] ?? $response['responseCode'] ?? '',
@@ -585,9 +666,9 @@ class WC_Jio_Pay_Refund {
      * @param SimpleXMLElement $response XML response
      * @return array Normalized response
      */
-    private function normalize_xml_response($response) {
+    private function normalize_xml_response($response, $kind = 'request') {
         $array = json_decode(json_encode($response), true);
-        return $this->normalize_json_response($array);
+        return $this->normalize_json_response($array, $kind);
     }
 
     /**
@@ -596,8 +677,8 @@ class WC_Jio_Pay_Refund {
      * @param array $response URL-encoded response
      * @return array Normalized response
      */
-    private function normalize_url_encoded_response($response) {
-        return $this->normalize_json_response($response);
+    private function normalize_url_encoded_response($response, $kind = 'request') {
+        return $this->normalize_json_response($response, $kind);
     }
 
     /**
@@ -776,7 +857,7 @@ class WC_Jio_Pay_Refund {
             ];
         }
 
-        if (!$order->get_meta('_jio_pay_merchant_tr_id')) {
+        if (!$order->get_meta('_jio_pay_merchant_tr_id') && !$order->get_meta('_jio_pay_merchant_txn_no')) {
             return [
                 'can_refund' => false,
                 'reason' => 'Merchant transaction ID not found'

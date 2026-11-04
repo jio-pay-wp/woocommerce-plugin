@@ -129,6 +129,21 @@ class WC_Jio_Pay_Service
         return $this->merchant_id;
     }
 
+    /**
+     * The merchant category code, as configured for the active environment.
+     *
+     * Unlike the merchant id and secret this is safe to hand the popup: it
+     * says what kind of business the store is, not who it is or how to sign
+     * for it. The SDK needs it -- its UPI screen only renders the "pay by
+     * UPI ID" field when the MCC is one it recognises.
+     *
+     * @return string
+     */
+    public function get_mcc_code()
+    {
+        return $this->mcc_code;
+    }
+
     /* ---------------------------------------------------------------------
      * Endpoints
      * ------------------------------------------------------------------- */
@@ -137,11 +152,15 @@ class WC_Jio_Pay_Service
      * Resolve a Jio endpoint URL for the current environment.
      *
      * Note the path inconsistency in Jio's own documentation: UAT carries a
-     * /tsp/ prefix throughout, production drops it for initiateSale and
-     * generateQR but keeps it for /command (which is what the refund handler
-     * has been calling successfully in production since 1.1). The /command
-     * production URL is therefore left as the refund handler has it rather
-     * than "corrected" on a guess.
+     * /tsp/ prefix throughout, production drops it everywhere -- /command
+     * included.
+     *
+     * This was wrong until 1.4.1, which cost us every production STATUS and
+     * every production refund: nginx answered /tsp/pg/api/command with a 404
+     * HTML page, so there was never a response body to parse. Probing the
+     * production host settles it -- /tsp/pg/api/command returns the 404,
+     * /pg/api/command returns Jio's own JSON ("transaction type cannot be
+     * empty" for an empty probe), which only a live handler produces.
      *
      * @param string $which 'initiateSale', 'generateQR' or 'command'.
      * @return string
@@ -151,7 +170,7 @@ class WC_Jio_Pay_Service
         $prod = [
             'initiateSale' => 'https://jiopay.co.in/pg/api/v2/initiateSale',
             'generateQR'   => 'https://jiopay.co.in/pg/api/generateQR',
-            'command'      => 'https://jiopay.co.in/tsp/pg/api/command',
+            'command'      => 'https://jiopay.co.in/pg/api/command',
             'binDetails'   => 'https://jiopay.co.in/pg/api/bin/details',
         ];
 

@@ -942,10 +942,14 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 error_log('Found order: ' . $order_id);
             }
 
-            // Extract payment details
-            $txn_auth_id = $payment_data['txnAuthID'] ?? '';
-            $txn_response_code = $payment_data['txnResponseCode'] ?? '';
-            $txn_description = $payment_data['txnRespDescription'] ?? '';
+            // Extract payment details. Same field-name drift as the return
+            // handler: Jio's payload carries txnID / responseCode /
+            // respDescription, so reading only the txn* names left
+            // $txn_response_code empty and the check below rejected a
+            // successful payment as failed.
+            $txn_auth_id = $payment_data['txnAuthID'] ?? $payment_data['txnID'] ?? $payment_data['paymentID'] ?? '';
+            $txn_response_code = $payment_data['txnResponseCode'] ?? $payment_data['responseCode'] ?? '';
+            $txn_description = $payment_data['txnRespDescription'] ?? $payment_data['respDescription'] ?? '';
             $amount = $payment_data['amount'] ?? '';
 
             error_log(sprintf(
@@ -1191,9 +1195,15 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             error_log('Received payment data: ' . print_r($payment_data, true));
 
             // Extract common JioPay response fields
-            $txn_auth_id = $payment_data['txnAuthID'] ?? $payment_data['txnAuthId'] ?? '';
+            // Jio's return POST names none of these the way the original
+            // handler assumed. A real callback carries txnID, responseCode
+            // and merchantTxnNo -- there is no txnAuthID and no merchantTrId
+            // in it at all. The old names are kept at the front of each
+            // chain in case Jio sends them on some other flow, but the names
+            // Jio actually uses now follow them.
+            $txn_auth_id = $payment_data['txnAuthID'] ?? $payment_data['txnAuthId'] ?? $payment_data['txnID'] ?? $payment_data['paymentID'] ?? '';
             $txn_response_code = $payment_data['txnResponseCode'] ?? $payment_data['responseCode'] ?? '';
-            $merchant_tr_id = $payment_data['merchantTrId'] ?? $payment_data['merchantTransactionId'] ?? '';
+            $merchant_tr_id = $payment_data['merchantTrId'] ?? $payment_data['merchantTransactionId'] ?? $payment_data['merchantTxnNo'] ?? '';
             $amount = $payment_data['amount'] ?? '';
             $order_id = $payment_data['order_id'] ?? $payment_data['orderId'] ?? 0;
 
@@ -1322,7 +1332,14 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             // Store payment data in order meta
             $order->update_meta_data('_jio_pay_txn_auth_id', $txn_auth_id);
             $order->update_meta_data('_jio_pay_response_code', $txn_response_code);
-            $order->update_meta_data('_jio_pay_merchant_tr_id', $merchant_tr_id);
+            // Only when the callback actually carried one. remember_txn_no()
+            // has already written the number the server sent to Jio, and an
+            // unconditional write here overwrote that with '' whenever the
+            // field name did not match -- which is what left paid orders
+            // reporting "Merchant transaction ID not found" and unrefundable.
+            if ($merchant_tr_id !== '') {
+                $order->update_meta_data('_jio_pay_merchant_tr_id', $merchant_tr_id);
+            }
             $order->update_meta_data('_jio_pay_return_data', $payment_data);
             $order->save();
 
@@ -1436,7 +1453,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
         }
 
-        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment, $this->agregator_id);
         
         // AUTO-CHECK REFUND STATUS FIRST if order is on-hold with pending refund
         $refund_merchant_txn_no = $order->get_meta('_jio_pay_refund_merchant_txn_no');
@@ -1641,7 +1658,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
         }
 
-        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment, $this->agregator_id);
         $result = $refund_handler->process_full_refund($order_id);
 
         if ($result['success']) {
@@ -1685,7 +1702,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
         }
 
-        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment, $this->agregator_id);
         
         // Use the refund class's check_refund_status which properly parses the response
         $status_result = $refund_handler->check_refund_status($merchant_txn_no);
@@ -1728,7 +1745,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
             require_once(JIO_PAY_PLUGIN_DIR . 'includes/class-jio-pay-refund.php');
         }
 
-        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment);
+        $refund_handler = new WC_Jio_Pay_Refund($this->merchant_id, $this->secret_key, $this->environment, $this->agregator_id);
         
         // Call the public method to check status
         $status_result = $refund_handler->check_refund_status($refund_merchant_txn_no);
@@ -2140,6 +2157,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'merchantName'        => get_bloginfo('name'),
                 'merchantLogo'        => $this->resolve_merchant_logo($options),
                 'allowedPaymentTypes' => $this->resolve_payment_types($options),
+                // The SDK gates its UPI VPA field on this: off iOS it shows
+                // the "pay by UPI ID" input only when the MCC is one of the
+                // codes it knows. Sent unlike merchantId and aggregatorID
+                // because a category code identifies a kind of business,
+                // not this merchant, and the popup genuinely needs it.
+                'mcc_code'            => $service->get_mcc_code(),
                 'theme'               => $options['theme'] ?? 'light',
                 'timeOut'             => (int) (($options['timeout'] ?? '') === '' ? 300 : $options['timeout']),
                 'customerEmailID'     => $order && $order->get_billing_email()
