@@ -116,6 +116,10 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         add_action('wp_ajax_nopriv_jio_pay_txn_status', [$this, 'ajax_txn_status']);
         add_action('wp_ajax_jio_pay_bin_details', [$this, 'ajax_bin_details']);
         add_action('wp_ajax_nopriv_jio_pay_bin_details', [$this, 'ajax_bin_details']);
+        // The SDK names this action jio_pay_card_bin. Both reach the same
+        // handler rather than forcing a rename at one end or the other.
+        add_action('wp_ajax_jio_pay_card_bin', [$this, 'ajax_bin_details']);
+        add_action('wp_ajax_nopriv_jio_pay_card_bin', [$this, 'ajax_bin_details']);
 
         // Refund endpoints (admin only)
         add_action('wp_ajax_jio_pay_process_refund', [$this, 'ajax_process_refund']);

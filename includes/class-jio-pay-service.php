@@ -324,6 +324,35 @@ class WC_Jio_Pay_Service
     }
 
     /**
+     * Put a card expiry into the YYYYMM form Jio's samples use.
+     *
+     * The popup collects MM/YY and strips the slash, giving MMYY -- Jio's
+     * documented sample is 203207, which is YYYYMM. Rather than send a
+     * four-digit value and have the signature verify against an expiry the
+     * gateway reads differently, both shapes are accepted here and
+     * normalised.
+     *
+     * A six-digit value is assumed to be YYYYMM already and passed through.
+     *
+     * @param string $expiry
+     * @return string
+     */
+    public static function normalise_card_expiry($expiry)
+    {
+        $digits = preg_replace('/\D/', '', (string) $expiry);
+
+        if (strlen($digits) === 4) {
+            // MMYY -> YYYYMM
+            $month = substr($digits, 0, 2);
+            $year  = substr($digits, 2, 2);
+
+            return '20' . $year . $month;
+        }
+
+        return $digits;
+    }
+
+    /**
      * Build a signed initiateSale payload.
      *
      * Amount, merchantTxnNo and returnURL are supplied by the caller because
@@ -385,7 +414,9 @@ class WC_Jio_Pay_Service
 
         foreach ($spec['extra'] as $field) {
             if (isset($args[$field]) && $args[$field] !== '') {
-                $payload[$field] = (string) $args[$field];
+                $payload[$field] = $field === 'cardExpiry'
+                    ? self::normalise_card_expiry($args[$field])
+                    : (string) $args[$field];
             }
         }
 
