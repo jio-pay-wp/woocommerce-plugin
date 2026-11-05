@@ -121,6 +121,12 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         add_action('wp_ajax_jio_pay_card_bin', [$this, 'ajax_bin_details']);
         add_action('wp_ajax_nopriv_jio_pay_card_bin', [$this, 'ajax_bin_details']);
 
+        // Server-to-server configuration endpoint. Not registered in this
+        // build: nothing consumes it. The implementation is retained --
+        // re-enable by uncommenting these two lines.
+        // add_action('wp_ajax_jio_pay_client_config', [$this, 'ajax_client_config']);
+        // add_action('wp_ajax_nopriv_jio_pay_client_config', [$this, 'ajax_client_config']);
+
         // Refund endpoints (admin only)
         add_action('wp_ajax_jio_pay_process_refund', [$this, 'ajax_process_refund']);
         add_action('wp_ajax_jio_pay_get_refund_status', [$this, 'ajax_get_refund_status']);
@@ -299,6 +305,46 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
                 'type' => 'number',
                 'description' => __('Payment popup timeout in seconds. Defaults to 300 (5 minutes) when left blank.', 'woocommerce'),
                 'default' => '300'
+            ],
+
+            'client_api_section' => [
+                'title' => __('Encrypted configuration API', 'woocommerce'),
+                'type' => 'title',
+                'description' => __('Lets your own backend fetch the gateway configuration for one payment mode, encrypted under your RSA public key. The private key is never given to, stored by, or used by this plugin.', 'woocommerce'),
+            ],
+            'client_public_key' => [
+                'title' => __('Client RSA Public Key (PEM)', 'woocommerce'),
+                'type' => 'textarea',
+                'description' => __('Paste the PUBLIC key only, beginning -----BEGIN PUBLIC KEY-----. Never paste a private key here.', 'woocommerce'),
+                'css' => 'width:100%;height:160px;font-family:monospace;',
+                'default' => ''
+            ],
+            'client_encryption_mode' => [
+                'title' => __('Encryption Mode', 'woocommerce'),
+                'type' => 'select',
+                'options' => [
+                    'rsa' => __('RSA only (payload must fit the key)', 'woocommerce'),
+                    'hybrid' => __('Hybrid AES-256-GCM + RSA (no size limit)', 'woocommerce'),
+                ],
+                'description' => __('RSA-only matches the simplest decrypt routine but a 2048-bit key carries just 214 bytes. Choose hybrid if the payload is larger.', 'woocommerce'),
+                'default' => 'rsa',
+                'desc_tip' => true
+            ],
+            'client_redirect_success' => [
+                'title' => __('Redirect URL - Success', 'woocommerce'),
+                'type' => 'text',
+                'description' => __('Left blank, the plugin return handler is used.', 'woocommerce'),
+                'default' => ''
+            ],
+            'client_redirect_cancelled' => [
+                'title' => __('Redirect URL - Cancelled', 'woocommerce'),
+                'type' => 'text',
+                'default' => ''
+            ],
+            'client_redirect_failed' => [
+                'title' => __('Redirect URL - Failed', 'woocommerce'),
+                'type' => 'text',
+                'default' => ''
             ]
         ];
     }
@@ -1791,9 +1837,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     /* ---------------------------------------------------------------------
      * Server-side Jio API endpoints
      *
-     * The browser never sees the merchant secret, and never sets the amount.
-     * It names the order it is paying for; we price that order ourselves,
-     * mint the merchant transaction number, sign the payload and call Jio.
+     * Retained but not used by the checkout integration in this build.
      * ------------------------------------------------------------------- */
 
     /**
@@ -2111,6 +2155,64 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      * render its payment options. No credentials are in the reply beyond the
      * merchant and aggregator ids, which are not secrets.
      */
+    /**
+     * AJAX: hand the merchant's backend its configuration for one payment
+     * mode, encrypted under their RSA public key.
+     *
+     * POST action=jio_pay_client_config, payment_mode=NB
+     *
+     * The endpoint is open: what it returns is encrypted under the merchant's
+     * public key, so a caller without the matching private key gets a blob it
+     * cannot read. It answers only once a public key is configured.
+     *
+     * The response body is the encryption envelope and nothing else. This
+     * plugin cannot read it back: decryption needs the private key, which
+     * stays on the merchant's server and is never sent here.
+     */
+    public function ajax_client_config()
+    {
+        $this->start_output_capture();
+        ini_set('display_errors', 0);
+
+        try {
+            $options = get_option('woocommerce_jio_pay_settings', []);
+
+            $mode = isset($_POST['payment_mode']) ? $_POST['payment_mode'] : ($_POST['payment_type'] ?? '');
+            $mode = sanitize_text_field(wp_unslash((string) $mode));
+
+            if ($mode === '') {
+                $this->send_jio_error('jio_pay_missing_payment_mode', 'No payment mode was given.');
+            }
+
+            $service = $this->service();
+            if (!$service->is_configured()) {
+                $this->send_jio_error('jio_pay_not_configured', 'Jio Pay is not configured.');
+            }
+
+            $config = $service->build_client_config($mode);
+            if (is_wp_error($config)) {
+                $this->send_jio_error($config->get_error_code(), $config->get_error_message());
+            }
+
+            $envelope = $service->encrypt_for_client(
+                $config,
+                ($options['client_encryption_mode'] ?? 'rsa') === 'hybrid'
+                    ? WC_Jio_Pay_Service::ENCRYPTION_HYBRID
+                    : WC_Jio_Pay_Service::ENCRYPTION_RSA
+            );
+
+            if (is_wp_error($envelope)) {
+                $this->send_jio_error($envelope->get_error_code(), $envelope->get_error_message());
+            }
+
+            $this->discard_buffered_output();
+            wp_send_json($envelope);
+        } catch (\Throwable $e) {
+            error_log('Jio Pay client_config failed: ' . $e->getMessage());
+            $this->send_jio_error('jio_pay_internal_error', 'Could not build the configuration.');
+        }
+    }
+
     public function ajax_init_checkout()
     {
         $this->start_output_capture();

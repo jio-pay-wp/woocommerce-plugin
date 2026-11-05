@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 2.0.1
+ * Version: 1.3.6
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '2.0.1');
+define('JIO_PAY_VERSION', '1.3.6');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -247,7 +247,9 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-sdk',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-sdk.js',
             [],
-            '1.2.9',
+            // Tracks the plugin version so an upgrade serves the new file
+            // rather than a cached copy.
+            JIO_PAY_VERSION,
             true
         );
 
@@ -262,7 +264,7 @@ add_action('wp_enqueue_scripts', function () {
             'jio-pay-integration',
             plugin_dir_url(__FILE__) . 'assets/jio-pay-integration.js',
             $integration_deps,
-            '1.2.9',
+            JIO_PAY_VERSION,
             true
         );
 
@@ -401,11 +403,19 @@ add_action('wp_enqueue_scripts', function () {
         // Get plugin settings
         $options = get_option('woocommerce_jio_pay_settings', []);
         
-        // Credentials are deliberately not read here. Nothing on this page
-        // needs them: WC_Jio_Pay_Service loads them server side when a
-        // payment is actually made. Reading them into a variable that feeds
-        // wp_localize_script is how the secret came to be published in the
-        // first place.
+        // Select the credential set for the active environment.
+        $environment = $options['environment'] ?? 'uat';
+        if ($environment === 'prod') {
+            $merchant_id  = $options['live_merchant_id'] ?? '';
+            $secret_key   = $options['live_secret_key'] ?? '';
+            $agregator_id = $options['live_agregator_id'] ?? '';
+            $mcc_code     = $options['live_mcc_code'] ?? '';
+        } else {
+            $merchant_id  = $options['uat_merchant_id'] ?? '';
+            $secret_key   = $options['uat_secret_key'] ?? '';
+            $agregator_id = $options['uat_agregator_id'] ?? '';
+            $mcc_code     = $options['uat_mcc_code'] ?? '';
+        }
 
         // Get cart/order data for payment
         $total = '0.00';
@@ -449,32 +459,20 @@ add_action('wp_enqueue_scripts', function () {
         wp_localize_script('jio-pay-integration', 'jioPayVars', [
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('jio_pay_nonce'),
-            // merchant_id, agregator_id, mcc_code and environment are not
-            // here on purpose. The server builds every Jio payload now, so it
-            // supplies its own identifiers; publishing them bought nothing
-            // and handed anyone viewing source the merchant's full identity.
+            'merchant_id' => $merchant_id,
+            'environment' => $environment,
+            'agregator_id' => $agregator_id,
+            'mcc_code' => $mcc_code,
             'theme' => $options['theme'] ?? 'light',
             'payment_method' => $options['payment_method'] ?? 'all',
             'allowed_payment_types' => $options['allowed_payment_types'] ?? 'all',
             'timeout' => (int) (($options['timeout'] ?? '') === '' ? 300 : $options['timeout']),
-            // The merchant secret is deliberately absent. It used to be
-            // published here so Jio's SDK could compute secureHash in the
-            // browser; it is now held in the database and used only by
-            // WC_Jio_Pay_Service, server side. The SDK calls these endpoints
-            // instead of signing for itself.
-            'endpoints' => [
-                // Only what the contract actually uses. generate_qr and
-                // get_payment_amount were advertised here but read by
-                // nobody: initiate_sale routes UPI QR itself, and
-                // init_checkout replaced the separate amount lookup.
-                'init_checkout' => 'jio_pay_init_checkout',
-                'initiate_sale' => 'jio_pay_initiate_sale',
-                'txn_status'    => 'jio_pay_txn_status',
-                'bin_details'   => 'jio_pay_bin_details',
-                'verify'        => 'jio_pay_verify_payment',
-            ],
-            // No 'amount' either: a total baked in at render time is the
-            // bug fixed in 1.3.5. Ask jio_pay_init_checkout for the live one.
+            // Part of the configuration the SDK expects.
+            'secret_key' => $secret_key,
+            // Stale the moment shipping, a coupon or tax changes, so the JS
+            // re-reads it from jio_pay_get_payment_amount before opening the
+            // popup rather than trusting this value.
+            'amount' => $total,
             'customer_email' => $customer_email,
             'customer_name' => $customer_name,
             'use_test_data' => $use_test_data,

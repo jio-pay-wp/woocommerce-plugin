@@ -1,98 +1,3 @@
-/**
- * Client for the plugin's server-side Jio endpoints.
- *
- * Nothing here knows the merchant secret. Each call names the order being
- * paid for; the server prices that order, mints the transaction number,
- * signs the payload and talks to Jio. See includes/class-jio-pay-service.php.
- */
-window.JioPayApi = (function () {
-    'use strict';
-
-    function post(action, payload) {
-        var body = Object.assign({
-            action: action,
-            nonce: jioPayVars.nonce
-        }, payload || {});
-
-        return new Promise(function (resolve, reject) {
-            jQuery.post(jioPayVars.ajax_url, body)
-                .done(function (response) {
-                    if (response && response.success) {
-                        resolve(response.data);
-                        return;
-                    }
-
-                    reject(new Error(
-                        (response && response.data && response.data.message) ||
-                        'Jio Pay did not accept the request.'
-                    ));
-                })
-                .fail(function (xhr, status) {
-                    // A 200 with an unparseable body lands here too. Never
-                    // report that as a plain failure: the charge may have
-                    // gone through.
-                    reject(new Error(
-                        status === 'parsererror'
-                            ? 'The payment status could not be confirmed. Do not pay again; check your order first.'
-                            : 'Could not reach the store to process the payment.'
-                    ));
-                });
-        });
-    }
-
-    // Held between the two events: issued by initCheckout, replayed on
-    // every later call so the server knows which checkout this is.
-    var checkoutRef = '';
-
-    function identity() {
-        return checkoutRef
-            ? { checkout_ref: checkoutRef }
-            : { order_id: window.currentOrderId || 0, order_key: window.currentOrderKey || '' };
-    }
-
-    return {
-        /**
-         * Event 1 -- the shopper picked Jio Pay.
-         *
-         * Returns everything the popup needs to render its payment options,
-         * and the checkoutRef that identifies this checkout from here on.
-         */
-        initCheckout: function () {
-            return post(jioPayVars.endpoints.init_checkout, {
-                order_id: window.currentOrderId || 0,
-                order_key: window.currentOrderKey || ''
-            }).then(function (config) {
-                checkoutRef = config.checkoutRef;
-                return config;
-            });
-        },
-
-        /**
-         * Event 2 -- the shopper picked a payment option in the popup.
-         *
-         * @param {string} paymentType The code the popup displayed, e.g.
-         *        'NB', 'UPI_QR', 'CREDIT_CARD', 'DEBIT_CARD'.
-         * @param {object} [details] Card fields, for the card types only.
-         */
-        initiate: function (paymentType, details) {
-            return post(
-                jioPayVars.endpoints.initiate_sale,
-                Object.assign({ payment_type: paymentType }, identity(), details || {})
-            );
-        },
-
-        /** Ask Jio what happened to this checkout's transaction. */
-        checkStatus: function () {
-            return post(jioPayVars.endpoints.txn_status, identity());
-        },
-
-        /** The current reference, if a checkout has been opened. */
-        getCheckoutRef: function () {
-            return checkoutRef;
-        }
-    };
-})();
-
 jQuery(document).ready(function ($) {
 
     // ============================================================
@@ -819,23 +724,30 @@ jQuery(document).ready(function ($) {
         }, 500);
     }
 
-    // Open the checkout server side, then open the popup.
+    // Ask the server what this payment should charge, then open the popup.
     //
-    // This is event 1 of the contract. It does two jobs: it is the only
-    // authority on what this payment should charge, and it issues the
-    // checkoutRef that identifies the checkout for the rest of the flow.
-    //
-    // It replaces reading a total out of the page. A total baked in at render
-    // time is stale the moment the shopper changes shipping method, applies a
-    // coupon, or edits an address that moves tax -- the popup and the order
-    // then disagreed, and verify_payment() rejected the payment as an amount
-    // mismatch after the customer had been charged.
+    // jioPayVars.amount is baked into the page when it renders, so it is stale
+    // the moment the shopper changes shipping method, applies a coupon, or
+    // edits an address that moves tax. Charging that figure meant the popup
+    // and the order disagreed, and verify_payment() then rejected the payment
+    // as an amount mismatch after the customer had been charged.
     function initiateJioPayment() {
-        JioPayApi.initCheckout().then(function (config) {
-            console.log('[JioPay] Checkout opened:', config.checkoutRef, 'charging', config.amount);
-            openJioPayPopup(config);
-        }).catch(function (error) {
-            console.error('[JioPay] Could not open the checkout:', error.message);
+        $.post(jioPayVars.ajax_url, {
+            action: 'jio_pay_get_payment_amount',
+            nonce: jioPayVars.nonce,
+            order_id: window.currentOrderId || 0,
+            order_key: window.currentOrderKey || ''
+        }).done(function (response) {
+            if (response && response.success && response.data && response.data.amount) {
+                console.log('[JioPay] Charging', response.data.amount, 'from', response.data.source);
+                openJioPayPopup(response.data.amount);
+                return;
+            }
+
+            console.error('[JioPay] Could not price the payment:', response);
+            failBeforeCharging();
+        }).fail(function (xhr, status) {
+            console.error('[JioPay] Amount lookup failed:', status);
             failBeforeCharging();
         });
     }
@@ -853,7 +765,7 @@ jQuery(document).ready(function ($) {
         );
     }
 
-    function openJioPayPopup(config) {
+    function openJioPayPopup(resolvedAmount) {
         // Check if we're in test mode
         if (jioPayVars.use_test_data) {
             // Show test mode confirmation
@@ -872,6 +784,7 @@ jQuery(document).ready(function ($) {
         $('.checkout-button').prop('disabled', true);
 
         // console.log('Initiating Jio Pay payment...', jioPayVars);
+        // console.log('Using Agregator ID:', jioPayVars.agregator_id);
         try {
             if (typeof jioPaySDK !== 'undefined') {
                 // Get customer data - prioritize order data, then form data, then defaults
@@ -897,83 +810,58 @@ jQuery(document).ready(function ($) {
                     console.log('Using form customer data:', customerData);
                 }
 
+                // Generate merchant transaction ID
+                const merchantTrId = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+
+                // Store merchant transaction ID for later reference
+                window.currentMerchantTrId = merchantTrId;
+                
                 // Reset payment handled flag before opening payment
                 window.jioPaymentHandled = false;
 
-                // What the page hands the SDK now. Note what is absent: no
-                // secret, no merchant or aggregator id, no amount and no
-                // transaction number. The SDK asks init_checkout for the
-                // ones it actually needs (event 1), and the server mints the
-                // transaction number when a payment is started (event 2).
-                //
-                // The transaction number in particular must not be generated
-                // here any more. It used to be minted in the browser and
-                // POSTed to jio_pay_store_merchant_tr_id, which would then
-                // overwrite the number the server had sent to Jio -- leaving
-                // the order tagged with a reference Jio never saw.
                 const paymentOptions = {
-                    
-                    ajaxUrl: jioPayVars.ajax_url,
-                    nonce: jioPayVars.nonce,
-                    endpoints: jioPayVars.endpoints,
-
-                    // Issued by event 1. The SDK replays this on every later
-                    // call; it is how the server knows which checkout this is.
-                    checkoutRef: config.checkoutRef,
-
-                    // Straight from event 1, already authoritative. Passed in
-                    // so the SDK need not call init_checkout a second time --
-                    // though calling it again with this checkoutRef is safe
-                    // and returns the same reference.
-                    amount: config.amount,
-                    allowedPaymentTypes: config.allowedPaymentTypes,
-                    merchantName: config.merchantName,
-                    merchantLogo: config.merchantLogo,
-
-                    // The merchant category code, from the gateway settings
-                    // for the active environment. The SDK's UPI screen hides
-                    // the "pay by UPI ID" field unless this is an MCC it
-                    // recognises (it waives the check on iOS), so without it
-                    // UPI_VPA is unreachable on Android and desktop even when
-                    // the method is switched on.
-                    mcc_code: config.mcc_code,
-
-                    // The fallback matters: the Theme setting is blank on a
-                    // fresh install, and passing "" where the SDK wants a
-                    // theme is not the same as passing nothing. This keeps
-                    // the behaviour the plugin had before 1.4.0.
-                    theme: config.theme || { color: "#E39B2B" },
-                    timeOut: config.timeOut,
-
-                    // Straight from the server, already lower case. Not
-                    // derived from testMode here: the SDK compares env with
-                    // === against "uat" and "prod", so the exact string
-                    // matters and one source of truth is safer.
-                    env: config.env,
-                    
-                    // Prefill only, for the popup's own fields.
-                    customerEmailID: config.customerEmailID || customerData.email,
-                    email: config.customerEmailID || customerData.email,
-                    userName: config.userName || customerData.name,
-
+                    amount: parseFloat(resolvedAmount).toFixed(2),
+                    env: jioPayVars.environment,
+                    merchantId: jioPayVars.merchant_id,
+                    aggId: jioPayVars.agregator_id,
+                    mcc_code: jioPayVars.mcc_code,
+                    customerEmailID: customerData.email,
+                    email: customerData.email,
+                    userName: customerData.name,
+                    merchantName: jioPayVars.merchant_name,
+                    merchantLogo: jioPayVars.merchantLogo || '',
+                    allowedPaymentTypes: Array.isArray(jioPayVars.allowed_payment_types) ? jioPayVars.allowed_payment_types : (jioPayVars.allowed_payment_types ? jioPayVars.allowed_payment_types.split(',') : ["NB", "UPI_QR", "UPI_VPA", "CREDIT_CARD", "DEBIT_CARD"]),
+                    theme: jioPayVars.theme || { color: "#E39B2B" },
+                    timeOut: jioPayVars.timeout || 300,
+                    secretKey: jioPayVars.secret_key,
+                    merchantTrId: merchantTrId,
+                    returnURL: '', //jioPayVars.return_url, // Return URL for POST callback
                     onSuccess: handlePaymentSuccess,
                     onFailure: handlePaymentFailure,
                     onClose: handlePaymentCancel
                 };
 
-                console.log('Jio Pay init (no credentials, no secret):', {
-                    ajaxUrl : jioPayVars.ajax_url,
-                    endpoints : jioPayVars.endpoints,
-                    nonce : jioPayVars.nonce,
-                    checkoutRef: paymentOptions.checkoutRef,
+                console.log('Payment Options:', {
+                    customerEmail: paymentOptions.customerEmailID,
+                    userName: paymentOptions.userName,
                     amount: paymentOptions.amount,
-                    allowedPaymentTypes: paymentOptions.allowedPaymentTypes,
-                    mcc_code: paymentOptions.mcc_code,
-                    // Lower case, straight from the server. The SDK
-                    // compares this with === against "uat" and "prod".
-                    env: config.env,
-                    testMode: config.testMode,
+                    merchantTrId: merchantTrId,
+                    returnURL: paymentOptions.returnURL
                 });
+
+                // Store merchant transaction ID in order meta before opening payment
+                if (window.currentOrderId) {
+                    $.post(jioPayVars.ajax_url, {
+                        action: 'jio_pay_store_merchant_tr_id',
+                        nonce: jioPayVars.nonce,
+                        order_id: window.currentOrderId,
+                        merchant_tr_id: merchantTrId
+                    }).done(function (response) {
+                        console.log('Merchant transaction ID stored:', response);
+                    }).fail(function (error) {
+                        console.error('Failed to store merchant transaction ID:', error);
+                    });
+                }
 
                 const jioPay = new jioPaySDK(paymentOptions);
                 // Keep a reference so the callbacks can tear the popup down.
@@ -1289,7 +1177,7 @@ jQuery(document).ready(function ($) {
 
         // Call verify_payment endpoint
         $.post(jioPayVars.ajax_url, {
-            action: jioPayVars.endpoints.verify,
+            action: 'jio_pay_verify_payment',
             nonce: jioPayVars.nonce,
             order_id: window.currentOrderId || 0,
             payment_data: {

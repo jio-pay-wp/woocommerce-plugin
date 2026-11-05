@@ -17,7 +17,7 @@
  *
  * @package WooJioPay
  * @since   1.4.0
- */
+*/
 
 if (!defined('ABSPATH')) exit;
 
@@ -297,7 +297,7 @@ class WC_Jio_Pay_Service
      *
      * @param string $code Code as sent by the popup.
      * @return array{route: string, mode: string}|WP_Error
-     */
+    */
     public static function resolve_payment_type($code)
     {
         $map = [
@@ -645,6 +645,273 @@ class WC_Jio_Pay_Service
             'http_code' => $code,
             'data'      => $data,
             'raw'       => $raw,
+        ];
+    }
+
+    /* ---------------------------------------------------------------------
+     * Encrypted configuration for the merchant's own backend
+     *
+     * The merchant's server asks this plugin for the configuration it needs
+     * for one payment mode -- the secret key, the redirect URL for that mode,
+     * and whatever else is agreed -- and gets it back encrypted under their
+     * RSA public key. Only they can read it, with a private key this plugin
+     * never sees, never stores and never asks for.
+     *
+     * There is deliberately no decrypt method here. Adding one would mean a
+     * private key had to live somewhere on the WordPress host, which is the
+     * single thing this design exists to avoid.
+     * ------------------------------------------------------------------- */
+
+    /** Plain RSA: one openssl_public_encrypt call. Size-limited (see below). */
+    const ENCRYPTION_RSA = 'rsa';
+
+    /** AES-256-GCM payload, RSA-wrapped content key. No size limit. */
+    const ENCRYPTION_HYBRID = 'hybrid';
+
+    /** Where the shipped public key lives, relative to the plugin root. */
+    const PUBLIC_KEY_FILE = 'keys/public.pem';
+
+    /**
+     * The merchant's RSA public key, in PEM form.
+     *
+     * Looked for in three places, first hit wins: the gateway settings, a
+     * JIO_PAY_CLIENT_PUBLIC_KEY constant in wp-config.php, then keys/public.pem
+     * inside the plugin. The file ships with the plugin, so it survives
+     * updates and needs no setup on a new install; the setting is there for
+     * merchants who would rather not have it in the codebase.
+     *
+     * A public key is not secret -- it is the half meant to be handed out --
+     * so a web-reachable file is not an exposure. The private key is the one
+     * that matters, and it never comes near this plugin.
+     *
+     * @return string PEM, or '' when none is configured.
+     */
+    public function client_public_key()
+    {
+        $options = get_option('woocommerce_jio_pay_settings', []);
+        $pem     = (string) ($options['client_public_key'] ?? '');
+
+        if ($pem === '' && defined('JIO_PAY_CLIENT_PUBLIC_KEY')) {
+            $pem = (string) JIO_PAY_CLIENT_PUBLIC_KEY;
+        }
+
+        if ($pem === '' && defined('JIO_PAY_PLUGIN_DIR')) {
+            $file = JIO_PAY_PLUGIN_DIR . self::PUBLIC_KEY_FILE;
+            if (is_readable($file)) {
+                $contents = file_get_contents($file);
+
+                // Refuse a private key outright rather than quietly loading
+                // one, whatever ends up in that path.
+                if ($contents !== false && strpos($contents, 'PRIVATE KEY') === false) {
+                    $pem = $contents;
+                }
+            }
+        }
+
+        /**
+         * Filter the public key used to encrypt configuration for the
+         * merchant's backend, for stores that keep it outside the database.
+         */
+        return (string) apply_filters('jio_pay_client_public_key', trim($pem), $this->environment);
+    }
+
+    /**
+     * Largest plaintext a given RSA key can carry with OAEP padding.
+     *
+     * PHP's openssl_public_encrypt exposes no way to choose the OAEP hash, so
+     * OpenSSL's default is what is used: SHA-1, costing 2*20+2 = 42 bytes of
+     * the modulus. A 2048-bit key therefore carries 214 bytes, not the 190 a
+     * SHA-256 OAEP implementation would allow. The receiving side must be
+     * configured for OAEP with SHA-1, or it will not decrypt what we send.
+     *
+     * @param resource|OpenSSLAsymmetricKey $key
+     * @return int Bytes, or 0 if the key cannot be sized.
+     */
+    public static function rsa_max_plaintext($key)
+    {
+        $details = openssl_pkey_get_details($key);
+        if (!$details || empty($details['bits'])) {
+            return 0;
+        }
+
+        return (int) floor($details['bits'] / 8) - 42;
+    }
+
+    /**
+     * Build the configuration payload for one payment mode.
+     *
+     * The redirect URL is resolved per mode, which is the whole reason the
+     * merchant's server passes a mode in: one endpoint, a different answer
+     * for each method.
+     *
+     * @param string $payment_mode Display or API code, e.g. NB or CREDIT_CARD.
+     * @param array  $extra        Additional members to merge in.
+     * @return array|WP_Error
+     */
+    public function build_client_config($payment_mode, array $extra = [])
+    {
+        $resolved = self::resolve_payment_type($payment_mode);
+        if (is_wp_error($resolved)) {
+            return $resolved;
+        }
+
+        // resolve_payment_type returns ['route' => ..., 'mode' => ...];
+        // 'mode' is the canonical code, so NETBANKING and NB agree.
+        $mode = $resolved['mode'];
+
+        // paymentMode is not echoed back: the caller named it in the request,
+        // so it is already known on their side. The mode still decides which
+        // redirect URL is resolved below -- that is what it is for.
+        $payload = [
+            'merchantId'  => $this->merchant_id,
+            'secretKey'   => $this->secret_key,
+            'redirectUrl' => $this->client_redirect_url($mode, 'success'),
+        ];
+
+        if ($this->aggregator_id !== '') {
+            $payload['aggregatorID'] = $this->aggregator_id;
+        }
+
+        /**
+         * Filter the configuration handed to the merchant's backend. Anything
+         * added here is encrypted with the rest -- but mind the RSA size
+         * ceiling when encryption mode is 'rsa'.
+         */
+        return apply_filters('jio_pay_client_config', array_merge($payload, $extra), $mode, $this->environment);
+    }
+
+    /**
+     * Redirect URL for one payment mode and outcome.
+     *
+     * Defaults to a single URL per outcome; the filter is where a store that
+     * genuinely needs a different destination per mode supplies it.
+     *
+     * @param string $mode    Resolved payment mode.
+     * @param string $outcome success, cancelled or failed.
+     * @return string
+     */
+    public function client_redirect_url($mode, $outcome = 'success')
+    {
+        $options = get_option('woocommerce_jio_pay_settings', []);
+        $key     = 'client_redirect_' . $outcome;
+        $url     = (string) ($options[$key] ?? '');
+
+        if ($url === '') {
+            $url = add_query_arg('action', 'jio_pay_return_handler', admin_url('admin-ajax.php'));
+        }
+
+        return (string) apply_filters('jio_pay_client_redirect_url', $url, $mode, $outcome, $this->environment);
+    }
+
+    /**
+     * Encrypt a payload for the merchant's backend.
+     *
+     * @param array  $payload
+     * @param string $mode self::ENCRYPTION_RSA or self::ENCRYPTION_HYBRID.
+     * @return array|WP_Error The envelope to return verbatim to the caller.
+     */
+    public function encrypt_for_client(array $payload, $mode = self::ENCRYPTION_RSA)
+    {
+        $pem = $this->client_public_key();
+        if ($pem === '') {
+            return new WP_Error('jio_pay_no_public_key', 'No client public key is configured.');
+        }
+
+        $key = openssl_pkey_get_public($pem);
+        if (!$key) {
+            return new WP_Error('jio_pay_bad_public_key', 'The configured client public key could not be read.');
+        }
+
+        $plaintext = wp_json_encode($payload);
+        if ($plaintext === false) {
+            return new WP_Error('jio_pay_encode_failed', 'Configuration could not be encoded.');
+        }
+
+        $this->log('client config encrypt', [
+            'mode'  => $mode,
+            'bytes' => strlen($plaintext),
+            'keys'  => array_keys($payload),
+        ]);
+
+        return $mode === self::ENCRYPTION_HYBRID
+            ? $this->hybrid_encrypt($plaintext, $key)
+            : $this->rsa_encrypt($plaintext, $key);
+    }
+
+    /**
+     * Straight RSA-OAEP, matching the reference implementation.
+     *
+     * @param string                        $plaintext
+     * @param resource|OpenSSLAsymmetricKey $key
+     * @return array|WP_Error
+     */
+    private function rsa_encrypt($plaintext, $key)
+    {
+        $capacity = self::rsa_max_plaintext($key);
+
+        // Fail here, with numbers, rather than letting openssl return false
+        // and reporting a generic encryption error. This is the limit people
+        // actually hit: three redirect URLs plus a secret is roughly 350
+        // bytes, and a 2048-bit key carries 214.
+        if ($capacity > 0 && strlen($plaintext) > $capacity) {
+            return new WP_Error(
+                'jio_pay_payload_too_large',
+                sprintf(
+                    'Payload is %d bytes but this RSA key carries only %d with OAEP padding. Use a 4096-bit public key (470 bytes), shorten the redirect URL, or switch to hybrid mode.',
+                    strlen($plaintext),
+                    $capacity
+                )
+            );
+        }
+
+        $encrypted = '';
+        if (!openssl_public_encrypt($plaintext, $encrypted, $key, OPENSSL_PKCS1_OAEP_PADDING)) {
+            return new WP_Error('jio_pay_encrypt_failed', 'Encryption failed.');
+        }
+
+        return [
+            'alg'  => 'RSA-OAEP-SHA1',
+            'data' => base64_encode($encrypted),
+        ];
+    }
+
+    /**
+     * AES-256-GCM for the payload, RSA only for the content key.
+     *
+     * Removes the size ceiling entirely, at the cost of the receiving side
+     * doing two steps instead of one: RSA-decrypt `key`, then AES-256-GCM
+     * decrypt `data` with that key, `iv` and `tag`.
+     *
+     * @param string                        $plaintext
+     * @param resource|OpenSSLAsymmetricKey $key
+     * @return array|WP_Error
+     */
+    private function hybrid_encrypt($plaintext, $key)
+    {
+        $content_key = openssl_random_pseudo_bytes(32, $strong);
+        if ($content_key === false || !$strong) {
+            return new WP_Error('jio_pay_weak_random', 'Could not generate a content key.');
+        }
+
+        $iv  = openssl_random_pseudo_bytes(12);
+        $tag = '';
+
+        $ciphertext = openssl_encrypt($plaintext, 'aes-256-gcm', $content_key, OPENSSL_RAW_DATA, $iv, $tag);
+        if ($ciphertext === false) {
+            return new WP_Error('jio_pay_encrypt_failed', 'Encryption failed.');
+        }
+
+        $wrapped = '';
+        if (!openssl_public_encrypt($content_key, $wrapped, $key, OPENSSL_PKCS1_OAEP_PADDING)) {
+            return new WP_Error('jio_pay_encrypt_failed', 'Content key could not be wrapped.');
+        }
+
+        return [
+            'alg'  => 'RSA-OAEP-SHA1+A256GCM',
+            'key'  => base64_encode($wrapped),
+            'iv'   => base64_encode($iv),
+            'tag'  => base64_encode($tag),
+            'data' => base64_encode($ciphertext),
         ];
     }
 
