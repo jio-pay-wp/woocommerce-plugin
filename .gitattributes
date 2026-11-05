@@ -5,3 +5,9 @@ logs/ export-ignore
 test-update-server.php export-ignore
 .gitattributes export-ignore
 .DS_Store export-ignore
+
+# Documentation for the server-side API, which is retained in the codebase
+# but not wired up in this build. Kept in the repository, kept out of
+# release archives: it does not describe how this build behaves.
+docs/SDK_INTEGRATION_CONTRACT.md export-ignore
+docs/SERVER_SIDE_API.md export-ignore
