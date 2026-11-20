@@ -16,6 +16,9 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     // Declare properties to fix PHP 8.2 deprecation warnings
     public $merchant_id;
     public $secret_key;
+
+    /** Guards against binding the settings-save hook once per instance. */
+    private static $save_hook_bound = false;
     public $agregator_id;
     public $mcc_code;
     public $environment;
@@ -78,7 +81,16 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         $this->allowed_payment_types = $this->get_option('allowed_payment_types');
         $this->timeout = $this->get_option('timeout');
 
-        add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
+        // Bound once per request, not once per instance. The gateway is
+        // constructed twice -- WooCommerce builds it from the
+        // woocommerce_payment_gateways filter, and the plugin builds it again
+        // on init to register the AJAX handlers. Two instances meant two
+        // copies of this hook, so every save ran process_admin_options()
+        // twice and printed each validation error twice.
+        if (!self::$save_hook_bound) {
+            self::$save_hook_bound = true;
+            add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'process_admin_options']);
+        }
         add_action('woocommerce_admin_field_environment_status', [$this, 'generate_environment_status_html']);
 
         // AJAX endpoints
@@ -138,7 +150,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
         // Add admin hooks for refund UI (only once)
         if (!self::$hooks_registered) {
             add_action('woocommerce_admin_order_data_after_order_details', [$this, 'add_refund_button']);
-            add_action('admin_notices', [__CLASS__, 'check_live_credentials_notice']);
+            add_action('admin_notices', [__CLASS__, 'check_credentials_notice']);
             add_filter('woocommerce_hidden_order_itemmeta', [$this, 'hide_refund_item_meta']);
             add_action('admin_footer', [$this, 'hide_refund_ui']);
             add_action('admin_enqueue_scripts', [$this, 'enqueue_settings_assets']);
@@ -768,32 +780,53 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
     }
 
     /**
-     * Show admin notice if live mode is enabled but credentials are missing
+     * Warn when the gateway is switched on but cannot appear at checkout.
+     *
+     * is_available() hides the gateway whenever the merchant id or secret key
+     * for the *active* environment is blank. Credentials on the other tab do
+     * not count. Previously this was only checked for Live, so a store set to
+     * UAT without UAT credentials showed no warning at all: the method was
+     * enabled in the settings, absent from checkout, and nothing said why.
      */
-    public static function check_live_credentials_notice()
+    public static function check_credentials_notice()
     {
         $settings = get_option('woocommerce_jio_pay_settings', []);
-        $environment = $settings['environment'] ?? 'uat';
-        
-        if ($environment === 'prod') {
-            $live_merchant_id = $settings['live_merchant_id'] ?? '';
-            $live_secret_key = $settings['live_secret_key'] ?? '';
-            
-            if (empty($live_merchant_id) || empty($live_secret_key)) {
-                echo '<div class="notice notice-error"><p>';
-                echo '<strong>Jio Pay Warning:</strong> You have selected Live (Production) mode but ';
-                if (empty($live_merchant_id) && empty($live_secret_key)) {
-                    echo 'Live Merchant ID and Live Secret Key are missing.';
-                } elseif (empty($live_merchant_id)) {
-                    echo 'Live Merchant ID is missing.';
-                } else {
-                    echo 'Live Secret Key is missing.';
-                }
-                echo ' The payment gateway will not be visible on checkout until these are configured.';
-                echo ' <a href="' . admin_url('admin.php?page=wc-settings&tab=checkout&section=jio_pay') . '">Configure now</a>';
-                echo '</p></div>';
-            }
+
+        if (($settings['enabled'] ?? 'no') !== 'yes') {
+            return;
         }
+
+        $environment = $settings['environment'] ?? 'uat';
+        $is_live     = ($environment === 'prod');
+        $env_label   = $is_live ? 'Live (Production)' : 'UAT (Testing)';
+        $prefix      = $is_live ? 'live' : 'uat';
+        $field_label = $is_live ? 'Live' : 'UAT';
+
+        $missing = [];
+        if (empty($settings[$prefix . '_merchant_id'])) {
+            $missing[] = $field_label . ' Merchant ID';
+        }
+        if (empty($settings[$prefix . '_secret_key'])) {
+            $missing[] = $field_label . ' Secret Key';
+        }
+
+        if (empty($missing)) {
+            return;
+        }
+
+        printf(
+            '<div class="notice notice-error"><p><strong>%s</strong> %s <strong>%s</strong> %s <a href="%s">%s</a></p></div>',
+            esc_html__('Jio Pay is enabled but will not appear at checkout.', 'woo-jiopay'),
+            esc_html__('The active environment is', 'woo-jiopay'),
+            esc_html($env_label),
+            esc_html(sprintf(
+                /* translators: %s: comma-separated list of missing setting names. */
+                __('and these required settings are empty: %s. Credentials on the other tab are not used.', 'woo-jiopay'),
+                implode(', ', $missing)
+            )),
+            esc_url(admin_url('admin.php?page=wc-settings&tab=checkout&section=jio_pay')),
+            esc_html__('Configure now', 'woo-jiopay')
+        );
     }
 
     /**
@@ -842,25 +875,66 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      * Valid MCC codes: ["6012", "6211"]
      * This field is MANDATORY
      */
-    public function validate_mcc_code_field($key, $value)
+    public function validate_mcc_code_field($key, $value, $for_environment = null, $label = '')
     {
-        // MCC Code is mandatory
-        if (empty($value)) {
-            WC_Admin_Settings::add_error(
-                __('Merchant Category Code (MCC) is required. Please enter a valid 4-digit MCC code.', 'woo-jiopay')
-            );
+        $value = is_string($value) ? trim($value) : '';
+
+        // Every tab posts on every save, including the ones that are hidden,
+        // so both MCC fields are validated whichever tab you were looking at.
+        // Only the environment actually in use can be mandatory: demanding a
+        // Live MCC from a merchant running UAT reported a failure for a field
+        // they had never filled in, next to the value they had just saved
+        // successfully.
+        $required = ($for_environment === null)
+            || ($for_environment === $this->active_environment_on_save());
+
+        // Keep whatever is already stored when a value is rejected. Returning
+        // '' here meant a rejected save also erased the previous value.
+        $stored = $this->get_option($key, '');
+
+        if ($value === '') {
+            if ($required) {
+                WC_Admin_Settings::add_error(sprintf(
+                    /* translators: %s: name of the credentials tab. */
+                    __('%s: Merchant Category Code (MCC) is required. Please enter a valid 4-digit MCC code.', 'woo-jiopay'),
+                    $label
+                ));
+                return $stored;
+            }
+
+            // Not the active environment: clearing it is allowed.
             return '';
         }
 
-        // MCC Code must be exactly 4 digits
         if (!preg_match('/^\d{4}$/', $value)) {
-            WC_Admin_Settings::add_error(
-                __('Merchant Category Code (MCC) must be a 4-digit number.', 'woo-jiopay')
-            );
-            return '';
+            WC_Admin_Settings::add_error(sprintf(
+                /* translators: %s: name of the credentials tab. */
+                __('%s: Merchant Category Code (MCC) must be a 4-digit number.', 'woo-jiopay'),
+                $label
+            ));
+            return $stored;
         }
 
         return $value;
+    }
+
+    /**
+     * The environment this save is settling on.
+     *
+     * Read from the posted form rather than from stored settings: the
+     * environment selector is saved in the same request, so a merchant
+     * switching to Live must be judged against Live, not against whatever
+     * was stored before the switch.
+     */
+    private function active_environment_on_save()
+    {
+        $field = $this->get_field_key('environment');
+
+        if (isset($_POST[$field])) {
+            return sanitize_text_field(wp_unslash($_POST[$field]));
+        }
+
+        return $this->get_option('environment', 'uat');
     }
 
     /**
@@ -868,7 +942,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      */
     public function validate_uat_mcc_code_field($key, $value)
     {
-        return $this->validate_mcc_code_field($key, $value);
+        return $this->validate_mcc_code_field($key, $value, 'uat', __('UAT Credentials', 'woo-jiopay'));
     }
 
     /**
@@ -876,7 +950,7 @@ class WC_Jio_Pay_Gateway extends WC_Payment_Gateway
      */
     public function validate_live_mcc_code_field($key, $value)
     {
-        return $this->validate_mcc_code_field($key, $value);
+        return $this->validate_mcc_code_field($key, $value, 'prod', __('Live Credentials', 'woo-jiopay'));
     }
 
     public function process_payment($order_id)

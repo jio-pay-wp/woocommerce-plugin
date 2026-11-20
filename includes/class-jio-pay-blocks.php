@@ -70,10 +70,7 @@ class WC_Jio_Pay_Blocks_Support extends AbstractPaymentMethodType {
             'supports'    => array( 'products' ),
             'logo_url'    => '', // Add logo URL if you have one
         ];
-        
-        // Debug log
-        error_log('Jio Pay Blocks - Payment Method Data: ' . print_r($data, true));
-        
+
         return $data;
     }
 }

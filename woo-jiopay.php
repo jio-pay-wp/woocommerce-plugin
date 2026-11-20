@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Jio Payments Solutions Ltd.
  * Description: The Jio Payment Solutions Ltd. Checkout plugin enables online payments on your WooCommerce store with seamless support for Cards, NetBanking, UPI QR, UPI Intent, and UPI VPA.
- * Version: 2.0.2
+ * Version: 2.0.3
  * Author: Jio Pay
  * Author URI: https://github.com/jio-pay-wp
  * Plugin URI: https://github.com/jio-pay-wp/woocommerce-plugin
@@ -25,7 +25,7 @@ if (!defined('ABSPATH'))
 
 
 // Plugin constants
-define('JIO_PAY_VERSION', '2.0.2');
+define('JIO_PAY_VERSION', '2.0.3');
 define('JIO_PAY_PLUGIN_FILE', __FILE__);
 define('JIO_PAY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('JIO_PAY_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -190,8 +190,8 @@ add_action('plugins_loaded', function () {
         return;
     }
 
-    // Include the API service. Every call to Jio goes through this, server
-    // side, so the merchant secret never has to reach the browser.
+    // Include the API service. Retained for the refund and status helpers;
+    // the checkout integration does not route through it in this build.
     if (!class_exists('WC_Jio_Pay_Service')) {
         require_once plugin_dir_path(__FILE__) . 'includes/class-jio-pay-service.php';
     }
